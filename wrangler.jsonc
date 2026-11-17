@@ -1,0 +1,35 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "hermes-virtual-office",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-01",
+  "assets": {
+    "directory": "app/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "hermes-office"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OFFICE_HUB",
+        "class_name": "OfficeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["OfficeHub"]
+    }
+  ],
+  "vars": {
+    "HERMES_ORIGIN": "https://hermes.example-tunnel.dev",
+    "SESSION_SECRET": "dev-secret"
+  }
+}
