@@ -1,4 +1,4 @@
-import { Hono } from "hono";
+import { Hono, type Context } from "hono";
 import {
   type AuthVariables,
   csrfProtection,
@@ -10,10 +10,14 @@ import {
 } from "./auth";
 import { getUserByEmail } from "./db";
 import type { Env } from "./env";
+import { HermesClient } from "./hermes";
+import { createAgentRoutes } from "./routes-agents";
 
 export { OfficeHub } from "./hub";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
+
+type AppContext = Context<{ Bindings: Env; Variables: AuthVariables }>;
 
 app.use("/api/*", csrfProtection());
 
@@ -62,5 +66,28 @@ app.get(
     return stub.fetch(c.req.raw);
   },
 );
+
+// Bindings (Hermes origin/secret, D1) only exist per request, so build the
+// agents router on demand. The router matches /agents, hence the /api strip.
+function withoutApiPrefix(request: Request): Request {
+  const url = new URL(request.url);
+  url.pathname = url.pathname.slice("/api".length) || "/";
+  return new Request(url, request);
+}
+
+async function mountAgentRoutes(c: AppContext): Promise<Response> {
+  const routes = createAgentRoutes({
+    hermes: new HermesClient({
+      origin: c.env.HERMES_ORIGIN,
+      secret: c.env.HERMES_HMAC_SECRET,
+    }),
+    db: c.env.DB,
+  });
+
+  return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
+}
+
+app.use("/api/agents", mountAgentRoutes);
+app.use("/api/agents/:id/messages", mountAgentRoutes);
 
 export default app;

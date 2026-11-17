@@ -30,6 +30,7 @@
   ],
   "vars": {
     "HERMES_ORIGIN": "https://hermes.example-tunnel.dev",
+    "HERMES_HMAC_SECRET": "dev-hmac-secret",
     "SESSION_SECRET": "dev-secret"
   }
 }

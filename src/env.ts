@@ -5,5 +5,6 @@ export interface Env {
   DB: D1Database;
   OFFICE_HUB: DurableObjectNamespace<OfficeHub>;
   HERMES_ORIGIN: string;
+  HERMES_HMAC_SECRET: string;
   SESSION_SECRET: string;
 }
