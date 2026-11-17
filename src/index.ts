@@ -1,4 +1,3 @@
-import { DurableObject } from "cloudflare:workers";
 import { Hono } from "hono";
 import {
   type AuthVariables,
@@ -10,14 +9,9 @@ import {
   verifyPassword,
 } from "./auth";
 import { getUserByEmail } from "./db";
+import type { Env } from "./env";
 
-export interface Env {
-  ASSETS: Fetcher;
-  DB: D1Database;
-  OFFICE_HUB: DurableObjectNamespace<OfficeHub>;
-  HERMES_ORIGIN: string;
-  SESSION_SECRET: string;
-}
+export { OfficeHub } from "./hub";
 
 const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
@@ -60,10 +54,13 @@ app.get(
   (c) => c.json({ userId: c.get("userId") }),
 );
 
-export class OfficeHub extends DurableObject<Env> {
-  async fetch(): Promise<Response> {
-    return Response.json({ error: "not_implemented" }, { status: 501 });
-  }
-}
+app.get(
+  "/api/ws",
+  (c, next) => requireAuth(c.env.SESSION_SECRET)(c, next),
+  (c) => {
+    const stub = c.env.OFFICE_HUB.get(c.env.OFFICE_HUB.idFromName("main"));
+    return stub.fetch(c.req.raw);
+  },
+);
 
 export default app;
