@@ -43,7 +43,7 @@ app.post("/api/auth/login", async (c) => {
     return c.json({ error: "invalid_credentials" }, 401);
   }
 
-  const { token, csrf } = startSession(user.id, c.env.SESSION_SECRET);
+  const { token, csrf } = await startSession(user.id, c.env.SESSION_SECRET);
   c.header("Set-Cookie", sessionCookie(token));
 
   return c.json({ csrf });

@@ -39,6 +39,30 @@ function decodeB64url(value: string): string {
   return atob(padded + "===".slice((padded.length + 3) % 4));
 }
 
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hmacHexWithWebCrypto(
+  keyBytes: Uint8Array,
+  message: string,
+): Promise<string> {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    keyBytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(message),
+  );
+
+  return toHex(new Uint8Array(signature));
+}
+
 function cookieToken(res: Response): string {
   const setCookie = res.headers.get("set-cookie");
   expect(setCookie).toBeTruthy();
@@ -95,11 +119,11 @@ describe("password hashing", () => {
 });
 
 describe("sessions", () => {
-  it("round-trips the uid and csrf claims with a 7-day exp", () => {
+  it("round-trips the uid and csrf claims with a 7-day exp", async () => {
     const now = new Date();
-    const token = createSession(OWNER_ID, SECRET, now);
+    const token = await createSession(OWNER_ID, SECRET, now);
 
-    const session = readSession(token, SECRET, now);
+    const session = await readSession(token, SECRET, now);
     expect(session?.userId).toBe(OWNER_ID);
     expect(session?.csrf).toMatch(/^[A-Za-z0-9_-]+$/);
 
@@ -115,7 +139,7 @@ describe("sessions", () => {
   });
 
   it("signs the payload with HMAC-SHA256", async () => {
-    const token = createSession(OWNER_ID, SECRET);
+    const token = await createSession(OWNER_ID, SECRET);
     const [payload, signature] = token.split(".");
 
     const key = await crypto.subtle.importKey(
@@ -134,8 +158,8 @@ describe("sessions", () => {
     expect(signature).toBe(expected);
   });
 
-  it("rejects tampered, foreign and expired sessions", () => {
-    const token = createSession(OWNER_ID, SECRET);
+  it("rejects tampered, foreign and expired sessions", async () => {
+    const token = await createSession(OWNER_ID, SECRET);
     const [payload, signature] = token.split(".");
     const forgedPayload = b64url(
       new TextEncoder().encode(
@@ -143,17 +167,49 @@ describe("sessions", () => {
       ),
     );
 
-    expect(readSession(`${forgedPayload}.${signature}`, SECRET)).toBeNull();
-    expect(readSession(token, "other-secret")).toBeNull();
-    expect(readSession("not-a-session", SECRET)).toBeNull();
+    expect(await readSession(`${forgedPayload}.${signature}`, SECRET)).toBeNull();
+    expect(await readSession(token, "other-secret")).toBeNull();
+    expect(await readSession("not-a-session", SECRET)).toBeNull();
 
-    const expired = createSession(
+    const expired = await createSession(
       OWNER_ID,
       SECRET,
       new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
     );
-    expect(readSession(expired, SECRET)).toBeNull();
+    expect(await readSession(expired, SECRET)).toBeNull();
     expect(JSON.parse(decodeB64url(payload)).uid).toBe(OWNER_ID);
+  });
+});
+
+describe("RFC 4231 HMAC-SHA256 vectors", () => {
+  it("matches test case 1 (20-byte 0x0b key)", async () => {
+    const digest = await hmacHexWithWebCrypto(
+      new Uint8Array(20).fill(0x0b),
+      "Hi There",
+    );
+
+    expect(digest).toBe(
+      "b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7",
+    );
+  });
+
+  it("matches test case 2 (Jefe key)", async () => {
+    const digest = await hmacHexWithWebCrypto(
+      new TextEncoder().encode("Jefe"),
+      "what do ya want for nothing?",
+    );
+
+    expect(digest).toBe(
+      "5bdcc146bf60754e6a042426089575c75a003f089d2739839dec58b964ec3843",
+    );
+  });
+
+  it("round-trips a session secret longer than the HMAC block size", async () => {
+    const longSecret = "k".repeat(131);
+    const token = await createSession(OWNER_ID, longSecret);
+
+    expect((await readSession(token, longSecret))?.userId).toBe(OWNER_ID);
+    expect(await readSession(token, SECRET)).toBeNull();
   });
 });
 
@@ -174,7 +230,7 @@ describe("POST /api/auth/login", () => {
     expect(setCookie).toContain("Max-Age=604800");
     expect(setCookie).not.toContain("Domain=");
 
-    const session = readSession(cookieToken(res), SECRET);
+    const session = await readSession(cookieToken(res), SECRET);
     expect(session?.userId).toBe(OWNER_ID);
     expect(body.csrf).toBe(session?.csrf);
   });
@@ -211,7 +267,7 @@ describe("GET /api/auth/me", () => {
   });
 
   it("rejects an expired session with 401", async () => {
-    const expired = createSession(
+    const expired = await createSession(
       OWNER_ID,
       SECRET,
       new Date(Date.now() - 8 * 24 * 60 * 60 * 1000),
