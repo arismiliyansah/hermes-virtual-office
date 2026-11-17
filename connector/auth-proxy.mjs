@@ -11,6 +11,7 @@ const TIMESTAMP_TOLERANCE_S = 300;
 const NONCE_TTL_S = 600;
 const NONCE_SWEEP_MS = 60_000;
 const DEFAULT_MAX_BODY_BYTES = 25 * 1024 * 1024;
+const DEFAULT_UPSTREAM_TIMEOUT_MS = 30_000;
 const MAX_NONCE_LENGTH = 128;
 const SIGNATURE_HEX = /^[0-9a-f]{64}$/i;
 const INTEGER = /^(0|[1-9][0-9]{0,14})$/;
@@ -97,7 +98,7 @@ function unauthorized(res, reason) {
   sendJson(res, 401, { error: "unauthorized", reason });
 }
 
-function forward(req, res, { upstream, body }) {
+function forward(req, res, { upstream, body, upstreamTimeoutMs }) {
   const headers = {};
   for (const [name, value] of Object.entries(req.headers)) {
     if (name.startsWith("x-hvo-")) continue;
@@ -130,17 +131,36 @@ function forward(req, res, { upstream, body }) {
       res.writeHead(upstreamRes.statusCode ?? 502, responseHeaders);
       upstreamRes.pipe(res);
       upstreamRes.on("error", () => res.destroy());
+      res.on("close", () => {
+        if (!res.writableEnded) upstreamRes.destroy();
+      });
     },
   );
 
+  upstreamReq.setTimeout(upstreamTimeoutMs, () => {
+    const error = new Error(`upstream did not respond within ${upstreamTimeoutMs}ms`);
+    error.code = "UPSTREAM_TIMEOUT";
+    upstreamReq.destroy(error);
+  });
+
   upstreamReq.on("error", (error) => {
+    if (res.destroyed || res.writableEnded) return;
     if (res.headersSent) {
       res.destroy();
+      return;
+    }
+    if (error.code === "UPSTREAM_TIMEOUT") {
+      sendJson(res, 504, { error: "gateway_timeout", reason: error.message });
       return;
     }
     sendJson(res, 502, { error: "bad_gateway", reason: error.message });
   });
 
+  // Once the request body has been read, a client disconnect no longer fires
+  // "aborted" on req; "close" on res is the reliable signal.
+  res.on("close", () => {
+    if (!res.writableEnded) upstreamReq.destroy();
+  });
   req.on("aborted", () => upstreamReq.destroy());
 
   upstreamReq.end(body);
@@ -152,10 +172,14 @@ export function createProxyServer({
   timestampToleranceSeconds = TIMESTAMP_TOLERANCE_S,
   nonceTtlSeconds = NONCE_TTL_S,
   maxBodyBytes = DEFAULT_MAX_BODY_BYTES,
+  upstreamTimeoutMs = DEFAULT_UPSTREAM_TIMEOUT_MS,
   now = Date.now,
 } = {}) {
   if (typeof secret !== "string" || secret.length === 0) {
     throw new Error("createProxyServer: secret is required");
+  }
+  if (!Number.isInteger(upstreamTimeoutMs) || upstreamTimeoutMs <= 0) {
+    throw new Error("createProxyServer: upstreamTimeoutMs must be a positive integer");
   }
   const upstreamUrl = typeof upstream === "string" ? new URL(upstream) : upstream;
   if (upstreamUrl.protocol !== "http:" && upstreamUrl.protocol !== "https:") {
@@ -226,7 +250,7 @@ export function createProxyServer({
     }
     seenNonces.set(nonce, expiresAt);
 
-    forward(req, res, { upstream: upstreamUrl, body });
+    forward(req, res, { upstream: upstreamUrl, body, upstreamTimeoutMs });
   });
 
   server.once("close", () => clearInterval(sweep));
@@ -256,7 +280,16 @@ export function configFromEnv(env = process.env) {
     throw new Error(`HVO_MAX_BODY_BYTES must be a positive integer, got ${maxBodyRaw}`);
   }
 
-  return { secret, upstream, port, host, maxBodyBytes };
+  const timeoutRaw = env.HVO_UPSTREAM_TIMEOUT_MS;
+  const upstreamTimeoutMs =
+    timeoutRaw === undefined ? DEFAULT_UPSTREAM_TIMEOUT_MS : Number(timeoutRaw);
+  if (!Number.isInteger(upstreamTimeoutMs) || upstreamTimeoutMs <= 0) {
+    throw new Error(
+      `HVO_UPSTREAM_TIMEOUT_MS must be a positive integer, got ${timeoutRaw}`,
+    );
+  }
+
+  return { secret, upstream, port, host, maxBodyBytes, upstreamTimeoutMs };
 }
 
 function main() {

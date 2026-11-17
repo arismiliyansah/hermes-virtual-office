@@ -29,6 +29,7 @@ Butuh Node ≥ 22. Tidak ada `npm install`.
 | `PORT` | tidak | `8787` | Port listen. |
 | `HVO_HOST` | tidak | `127.0.0.1` | Alamat listen. Biarkan loopback karena `cloudflared` berjalan di mesin yang sama. |
 | `HVO_MAX_BODY_BYTES` | tidak | `26214400` (25 MiB) | Batas body request; lebih dari ini dijawab `413`. Body harus dibaca utuh sebelum bisa diverifikasi, jadi batas ini mencegah pemakaian memori tanpa batas. |
+| `HVO_UPSTREAM_TIMEOUT_MS` | tidak | `30000` (30 dtk) | Batas diam (idle) socket ke Hermes. Lewat batas ini request upstream di-destroy; bila respons belum dimulai klien menerima `504`. |
 
 ## Format tanda tangan
 
@@ -61,7 +62,11 @@ Header yang diharapkan: `x-hvo-timestamp`, `x-hvo-nonce`, `x-hvo-signature`.
 Request yang lolos diteruskan apa adanya: method, path + query, dan body byte mentah.
 Header `x-hvo-*` dibuang sebelum diteruskan. Header hop-by-hop juga dibuang. Status,
 header, dan body respons upstream dikembalikan tanpa diubah (body di-stream). Bila
-upstream tidak bisa dihubungi, proxy menjawab `502`.
+upstream tidak bisa dihubungi, proxy menjawab `502`. Bila upstream diam melebihi
+`HVO_UPSTREAM_TIMEOUT_MS` sebelum mengirim respons, request upstream di-destroy dan klien
+menerima `504`; bila timeout terjadi saat body respons sedang di-stream, koneksi klien
+ditutup. Klien yang memutus koneksi (abort/timeout di sisi pemanggil) juga menyebabkan
+request dan respons upstream di-destroy, sehingga tidak ada socket yang tertinggal.
 
 ## Menjalankan test
 
@@ -71,7 +76,8 @@ node --test connector/auth-proxy.test.mjs
 
 Test memakai upstream palsu yang menggemakan method, path, dan body, lalu menguji request
 valid, timestamp -301/+301 detik, replay nonce, signature salah, signature yang keliru
-memasukkan query string, body yang diubah, dan header yang hilang.
+memasukkan query string, body yang diubah, header yang hilang, klien abort saat upstream
+hang, dan timeout upstream (`504` + socket upstream ditutup).
 
 ## systemd (Linux)
 

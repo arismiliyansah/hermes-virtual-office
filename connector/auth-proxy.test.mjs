@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import http from "node:http";
 import { createHash, createHmac, randomBytes } from "node:crypto";
 
-import { createProxyServer } from "./auth-proxy.mjs";
+import { createProxyServer, configFromEnv } from "./auth-proxy.mjs";
 
 const SECRET = "test-secret-not-for-production";
 
@@ -45,6 +45,26 @@ function listen(server) {
 
 function close(server) {
   return new Promise((resolve) => server.close(resolve));
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
+
+function delay(ms) {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref();
+  });
+}
+
+async function closeAll(server) {
+  server.closeAllConnections?.();
+  await close(server);
 }
 
 function call(port, { method = "GET", path = "/", headers = {}, body } = {}) {
@@ -256,4 +276,94 @@ test("rejects missing auth headers", async () => {
     assert.equal(response.status, 401);
     assert.equal(state.hits, 0);
   });
+});
+
+test("destroys the upstream request when the client aborts while upstream hangs", async () => {
+  const upstreamSeen = deferred();
+  const upstreamClosed = deferred();
+
+  const hanging = http.createServer((req) => {
+    req.socket.once("close", () => upstreamClosed.resolve());
+    req.resume();
+    upstreamSeen.resolve();
+  });
+  const upstreamPort = await listen(hanging);
+
+  const proxy = createProxyServer({
+    secret: SECRET,
+    upstream: `http://127.0.0.1:${upstreamPort}`,
+    upstreamTimeoutMs: 5000,
+  });
+  const proxyPort = await listen(proxy);
+
+  try {
+    const headers = signedHeaders({ method: "GET", path: "/hang" });
+    const clientReq = http.request({
+      host: "127.0.0.1",
+      port: proxyPort,
+      method: "GET",
+      path: "/hang",
+      headers,
+    });
+    clientReq.on("error", () => {});
+    clientReq.end();
+
+    await Promise.race([
+      upstreamSeen.promise,
+      delay(2000).then(() => assert.fail("upstream never received the request")),
+    ]);
+
+    clientReq.destroy();
+
+    const closedInTime = await Promise.race([
+      upstreamClosed.promise.then(() => true),
+      delay(2000).then(() => false),
+    ]);
+
+    assert.equal(closedInTime, true, "upstream socket must be destroyed after client abort");
+  } finally {
+    await closeAll(proxy);
+    await closeAll(hanging);
+  }
+});
+
+test("returns 504 and destroys upstream when it hangs past the timeout", async () => {
+  const upstreamClosed = deferred();
+
+  const hanging = http.createServer((req) => {
+    req.socket.once("close", () => upstreamClosed.resolve());
+    req.resume();
+  });
+  const upstreamPort = await listen(hanging);
+
+  const config = configFromEnv({
+    HVO_HMAC_SECRET: SECRET,
+    HERMES_UPSTREAM: `http://127.0.0.1:${upstreamPort}`,
+    HVO_UPSTREAM_TIMEOUT_MS: "100",
+  });
+  assert.equal(config.upstreamTimeoutMs, 100);
+
+  const proxy = createProxyServer(config);
+  const proxyPort = await listen(proxy);
+
+  try {
+    const headers = signedHeaders({ method: "GET", path: "/hang" });
+    const startedAt = Date.now();
+    const response = await call(proxyPort, { method: "GET", path: "/hang", headers });
+    const elapsed = Date.now() - startedAt;
+
+    assert.equal(response.status, 504);
+    assert.equal(JSON.parse(response.body).error, "gateway_timeout");
+    assert.ok(elapsed < 2000, `504 should arrive promptly, took ${elapsed}ms`);
+
+    const closedInTime = await Promise.race([
+      upstreamClosed.promise.then(() => true),
+      delay(2000).then(() => false),
+    ]);
+
+    assert.equal(closedInTime, true, "upstream socket must be destroyed after timeout");
+  } finally {
+    await closeAll(proxy);
+    await closeAll(hanging);
+  }
 });
