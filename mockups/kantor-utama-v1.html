@@ -1,0 +1,716 @@
+<!DOCTYPE html>
+<html lang="id" data-theme="day">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hermes Office — Mockup Kantor Utama (v1.1)</title>
+<style>
+  :root, html[data-theme="day"]{
+    --bg:#e9e1d2; --panel:#faf7f0; --panel-2:#f3ecdd;
+    --ink:#2f2b25; --ink-soft:#6f6a5e; --line:#ded3be;
+    --accent:#d07a2a; --accent-soft:#f6e3cd;
+    --sage:#6f9a63; --meet:#4f7fa8; --idle:#a49c8b; --a2a:#c08a2e;
+    --shadow:0 1px 2px rgba(47,43,37,.08), 0 8px 24px rgba(47,43,37,.08);
+    --input-bg:#ffffff; --card-bg:#ffffff; --me-bg:var(--accent);
+  }
+  html[data-theme="night"]{
+    --bg:#201d18; --panel:#282420; --panel-2:#302b25;
+    --ink:#e9e2d4; --ink-soft:#a89e8c; --line:#3e3830;
+    --accent:#d98936; --accent-soft:#3a2c1e;
+    --sage:#7fa873; --meet:#6f9cc2; --idle:#8d8677; --a2a:#c99a4e;
+    --shadow:0 1px 2px rgba(0,0,0,.35), 0 8px 24px rgba(0,0,0,.35);
+    --input-bg:#332e27; --card-bg:#2e2a24; --me-bg:#b96a25;
+  }
+  *{box-sizing:border-box; margin:0; padding:0}
+  html,body{height:100%}
+  body{
+    font-family:"Avenir Next","Trebuchet MS",system-ui,-apple-system,sans-serif;
+    background:var(--bg); color:var(--ink); overflow:hidden;
+    display:flex; flex-direction:column;
+    transition:background .3s, color .3s;
+  }
+
+  /* ── Top bar ─────────────────────────────── */
+  .topbar{
+    height:56px; flex:0 0 56px; display:flex; align-items:center; gap:14px;
+    padding:0 18px; background:var(--panel); border-bottom:1px solid var(--line);
+  }
+  .wordmark{display:flex; align-items:center; gap:10px; font-weight:700; font-size:15px}
+  .wordmark .gem{width:18px; height:18px; background:var(--accent);
+    clip-path:polygon(50% 0,100% 50%,50% 100%,0 50%); border-radius:2px;}
+  .office-name{color:var(--ink-soft); font-size:13px; padding-left:14px; border-left:1px solid var(--line)}
+  .topbar .spacer{flex:1}
+  .conn{
+    display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--ink-soft);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:999px; padding:6px 12px;
+  }
+  .conn .dot{width:8px;height:8px;border-radius:50%;background:var(--sage)}
+  .theme-toggle{display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden}
+  .theme-toggle button{
+    appearance:none; border:0; background:none; font:inherit; font-size:12px; font-weight:600;
+    color:var(--ink-soft); padding:7px 11px; cursor:pointer;
+  }
+  .theme-toggle button[aria-pressed="true"]{background:var(--panel-2); color:var(--ink)}
+  .avatar{
+    width:32px;height:32px;border-radius:50%; background:#8a6f4d; color:#fff;
+    display:flex;align-items:center;justify-content:center; font-size:12px; font-weight:700;
+  }
+
+  main{flex:1; display:flex; min-height:0}
+
+  /* ── Scene ───────────────────────────────── */
+  .scene-wrap{flex:1; position:relative; min-width:0; display:flex; flex-direction:column}
+  .scene{flex:1; display:flex; align-items:center; justify-content:center; padding:12px}
+  #stage{width:min(100%, 980px); height:auto; max-height:100%;}
+  .mockup-tag{
+    position:absolute; top:14px; right:16px; font-size:11px; letter-spacing:.04em;
+    color:var(--ink-soft); background:var(--panel); border:1px dashed var(--line);
+    padding:5px 9px; border-radius:6px;
+  }
+  .legend{
+    position:absolute; left:16px; top:14px; display:flex; gap:14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:8px;
+    padding:8px 12px; font-size:11.5px; color:var(--ink-soft); box-shadow:var(--shadow);
+  }
+  .legend span{display:flex; align-items:center; gap:6px}
+  .legend i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+  .event-feed{
+    position:absolute; left:16px; bottom:16px; width:320px;
+    background:var(--panel); border:1px solid var(--line); border-radius:10px;
+    box-shadow:var(--shadow); overflow:hidden;
+  }
+  .event-feed h4{font-size:11px; text-transform:uppercase; letter-spacing:.06em;
+    color:var(--ink-soft); padding:10px 14px 6px}
+  .event-feed ul{list-style:none; padding:0 0 8px}
+  .event-feed li{
+    display:flex; gap:9px; align-items:flex-start; padding:6px 14px; font-size:12.5px;
+    transition:opacity .4s;
+  }
+  .event-feed li time{color:var(--ink-soft); font-size:11px; flex:0 0 38px; padding-top:2px}
+
+  /* ── Dock (panel kanan) ──────────────────── */
+  .dock{
+    flex:0 0 372px; background:var(--panel); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; min-height:0;
+    transition:background .3s;
+  }
+  .tabs{display:flex; border-bottom:1px solid var(--line)}
+  .tabs button{
+    flex:1; appearance:none; border:0; background:none; padding:13px 4px 11px;
+    font:inherit; font-size:13px; font-weight:600; color:var(--ink-soft); cursor:pointer;
+    border-bottom:2px solid transparent;
+  }
+  .tabs button[aria-selected="true"]{color:var(--ink); border-bottom-color:var(--accent)}
+  .tabs button:hover{color:var(--ink)}
+  .panel{flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px}
+  .panel[hidden]{display:none}
+
+  /* Chat */
+  .chat-head{display:flex; align-items:center; gap:10px; padding-bottom:12px; border-bottom:1px solid var(--line)}
+  .chat-head .face{width:36px;height:36px;border-radius:10px; color:#fff; font-weight:700;
+    display:flex;align-items:center;justify-content:center;font-size:13px}
+  .chat-head .who b{display:block; font-size:14px}
+  .chat-head .who small{color:var(--ink-soft); font-size:11.5px}
+  .chip{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600;
+    border-radius:999px; padding:3px 9px; border:1px solid var(--line); color:var(--ink-soft)}
+  .chip i{width:7px;height:7px;border-radius:50%;background:currentColor;display:inline-block}
+  .chip.work{color:var(--sage); border-color:var(--line); background:var(--panel-2)}
+  .chip.meet{color:var(--meet); border-color:var(--line); background:var(--panel-2)}
+  .chip.idle{color:var(--idle); border-color:var(--line); background:var(--panel-2)}
+  .chip.a2a{color:var(--a2a); border-color:var(--line); background:var(--panel-2)}
+  .toolline{
+    font-size:11.5px; color:var(--ink-soft); background:var(--panel-2);
+    border:1px solid var(--line); border-radius:8px; padding:7px 10px;
+    font-family:ui-monospace,"SF Mono",Menlo,monospace;
+  }
+  .msgs{display:flex; flex-direction:column; gap:10px; flex:1}
+  .msg{max-width:85%; padding:9px 12px; border-radius:12px; font-size:13px; line-height:1.45}
+  .msg.them{align-self:flex-start; background:var(--panel-2); border:1px solid var(--line); border-top-left-radius:4px}
+  .msg.me{align-self:flex-end; background:var(--me-bg); color:#fff; border-top-right-radius:4px}
+  .msg small{display:block; margin-top:5px; font-size:10.5px; opacity:.65}
+  .typing-ind{align-self:flex-start; display:flex; gap:4px; padding:8px 12px}
+  .typing-ind i{width:6px;height:6px;border-radius:50%;background:var(--ink-soft); animation:tp 1s infinite; opacity:.5}
+  .typing-ind i:nth-child(2){animation-delay:.15s}.typing-ind i:nth-child(3){animation-delay:.3s}
+  @keyframes tp{0%,60%,100%{transform:translateY(0)}30%{transform:translateY(-4px)}}
+  .composer{display:flex; gap:8px; padding-top:12px; border-top:1px solid var(--line)}
+  .composer input{
+    flex:1; font:inherit; font-size:13px; padding:10px 12px; border-radius:9px;
+    border:1px solid var(--line); background:var(--input-bg); color:var(--ink);
+  }
+  .composer input::placeholder{color:var(--ink-soft); opacity:.7}
+  .btn{
+    appearance:none; border:0; font:inherit; font-size:13px; font-weight:600; cursor:pointer;
+    background:var(--accent); color:#fff; border-radius:9px; padding:10px 14px;
+  }
+  .btn.ghost{background:var(--panel-2); color:var(--ink); border:1px solid var(--line)}
+  .btn.small{padding:6px 10px; font-size:12px}
+
+  /* Kanban */
+  .board{display:grid; grid-template-columns:repeat(2,1fr); gap:10px}
+  .col{background:var(--panel-2); border:1px solid var(--line); border-radius:10px; padding:9px}
+  .col h5{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft);
+    display:flex; justify-content:space-between; margin-bottom:8px}
+  .card{
+    background:var(--card-bg); border:1px solid var(--line); border-radius:8px; padding:9px 10px;
+    font-size:12.5px; margin-bottom:8px; box-shadow:0 1px 1px rgba(47,43,37,.05);
+  }
+  .card:last-child{margin-bottom:0}
+  .card .owner{display:inline-flex; align-items:center; gap:6px; margin-top:7px;
+    font-size:11px; color:var(--ink-soft)}
+  .card .owner i{width:14px;height:14px;border-radius:4px;display:inline-block}
+  .card.review{border-left:3px solid var(--accent); background:var(--accent-soft)}
+  .card .actions{margin-top:8px; display:flex; gap:6px}
+
+  /* Meeting */
+  .meet-room{border:1px solid var(--line); border-radius:10px; padding:12px; background:var(--panel-2)}
+  .meet-room h4{font-size:14px; margin-bottom:2px}
+  .meet-room .meta{font-size:12px; color:var(--ink-soft); margin-bottom:10px}
+  .participants{display:flex; flex-wrap:wrap; gap:7px; margin-bottom:12px}
+  .participant{display:inline-flex; align-items:center; gap:7px; font-size:12px;
+    background:var(--card-bg); border:1px solid var(--line); border-radius:999px; padding:4px 10px 4px 5px}
+  .participant i{width:16px;height:16px;border-radius:5px;display:inline-block}
+  .participant.speaking{border-color:var(--meet); box-shadow:0 0 0 2px var(--panel-2)}
+  .minutes{background:var(--card-bg); border:1px solid var(--line); border-radius:10px; padding:12px}
+  .minutes h5{font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); margin-bottom:8px}
+  .minutes li{font-size:12.5px; margin-left:16px; margin-bottom:6px; line-height:1.4}
+
+  /* Cron */
+  .cron-row{
+    display:flex; align-items:center; gap:10px; background:var(--card-bg);
+    border:1px solid var(--line); border-radius:10px; padding:10px 12px;
+  }
+  .cron-row .info{flex:1; min-width:0}
+  .cron-row .info b{display:block; font-size:13px}
+  .cron-row .info small{font-size:11.5px; color:var(--ink-soft)}
+  .switch{width:36px; height:20px; border-radius:999px; background:var(--line); position:relative;
+    cursor:pointer; border:0; flex:0 0 36px; transition:background .15s}
+  .switch::after{content:""; position:absolute; top:2px; left:2px; width:16px; height:16px;
+    border-radius:50%; background:#fff; transition:left .15s; box-shadow:0 1px 2px rgba(0,0,0,.2)}
+  .switch[aria-checked="true"]{background:var(--sage)}
+  .switch[aria-checked="true"]::after{left:18px}
+
+  .empty-hint{font-size:12px; color:var(--ink-soft); background:var(--panel-2);
+    border:1px dashed var(--line); border-radius:8px; padding:10px 12px}
+
+  /* Agent di SVG */
+  .agent{cursor:pointer}
+  .typing-arm{animation:arm .35s infinite alternate}
+  .typing-arm.r{animation-delay:.18s}
+  @keyframes arm{from{transform:translateY(0)}to{transform:translateY(-1.6px)}}
+  .screen-line{transform-origin:left center; animation:scr 1.1s infinite steps(2)}
+  .screen-line.l2{animation-delay:.3s}.screen-line.l3{animation-delay:.6s}
+  @keyframes scr{0%,100%{transform:scaleX(.35)}50%{transform:scaleX(1)}}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wordmark"><span class="gem"></span>Hermes Office</div>
+  <div class="office-name">Kantor Pusat · Lantai 2</div>
+  <div class="spacer"></div>
+  <div class="theme-toggle" role="group" aria-label="Tema tampilan">
+    <button id="themeDay" aria-pressed="true">Siang</button>
+    <button id="themeNight" aria-pressed="false">Malam</button>
+  </div>
+  <div class="conn"><span class="dot"></span>vps-01 · Terhubung via tunnel</div>
+  <div class="avatar">AR</div>
+</header>
+
+<main>
+  <section class="scene-wrap">
+    <div class="scene">
+      <svg id="stage" viewBox="185 20 650 400" role="img" aria-label="Denah kantor isometrik"></svg>
+      <div class="mockup-tag">MOCKUP v1.1 · data contoh</div>
+      <div class="legend">
+        <span><i style="background:var(--sage)"></i>bekerja</span>
+        <span><i style="background:var(--meet)"></i>meeting</span>
+        <span><i style="background:var(--a2a)"></i>A2A</span>
+        <span><i style="background:var(--idle)"></i>idle</span>
+      </div>
+      <div class="event-feed">
+        <h4>Aktivitas terbaru</h4>
+        <ul id="events"></ul>
+      </div>
+    </div>
+  </section>
+
+  <aside class="dock">
+    <nav class="tabs" role="tablist">
+      <button role="tab" aria-selected="true"  data-tab="chat">Chat</button>
+      <button role="tab" aria-selected="false" data-tab="kanban">Kanban</button>
+      <button role="tab" aria-selected="false" data-tab="meeting">Meeting</button>
+      <button role="tab" aria-selected="false" data-tab="cron">Cron</button>
+    </nav>
+
+    <div class="panel" id="panel-chat" role="tabpanel">
+      <div class="chat-head">
+        <div class="face" id="chatFace" style="background:#5d7fa3">BI</div>
+        <div class="who">
+          <b id="chatName">Bimo</b>
+          <small id="chatRole">Backend Engineer</small>
+        </div>
+        <span style="flex:1"></span>
+        <span class="chip work" id="chatStatus"><i></i>bekerja</span>
+      </div>
+      <div class="toolline" id="chatTool">tool: edit_file · src/api/kanban.ts</div>
+      <div class="msgs" id="chatMsgs"></div>
+      <div class="composer">
+        <input id="composerInput" placeholder="Ketik pesan untuk Bimo…">
+        <button class="btn" id="sendBtn">Kirim</button>
+      </div>
+    </div>
+
+    <div class="panel" id="panel-kanban" role="tabpanel" hidden>
+      <div class="board" id="board"></div>
+      <div class="empty-hint">Setiap kartu adalah task di Hermes — pindahkan kartu dan statusnya ikut berubah di Hermes.</div>
+    </div>
+
+    <div class="panel" id="panel-meeting" role="tabpanel" hidden>
+      <div class="meet-room">
+        <h4>Standup Pagi</h4>
+        <div class="meta">Ruang Kaca · mulai 09:30 · dipimpin Citra</div>
+        <div class="participants" id="meetParts"></div>
+      </div>
+      <div class="minutes">
+        <h5>Notulen otomatis · disalin ke Hermes</h5>
+        <ul>
+          <li>Sprint ini 6 kartu; 1 menunggu persetujuan (audit tunnel).</li>
+          <li>Bimo: integrasi gateway selesai hari ini, besok masuk review.</li>
+          <li>Rilis v0.1 ditargetkan Jumat; Fajar siapkan tunnel cadangan.</li>
+        </ul>
+      </div>
+      <button class="btn ghost">Akhiri meeting & simpan notulen</button>
+    </div>
+
+    <div class="panel" id="panel-cron" role="tabpanel" hidden>
+      <div id="cronList"></div>
+    </div>
+  </aside>
+</main>
+
+<script>
+/* ═══════════════ Palet tema ═══════════════ */
+const DAY={
+  tileA:"#f3ebdb", tileB:"#ece2cc", meetA:"#e4e9e4", meetB:"#dde4dd",
+  rugA:"#e2cf9c", rugB:"#dbc794", tileStroke:"#d9ccae",
+  skirtA:"#c4b28c", skirtB:"#b3a07c", wall:"#e9dfc9", wallTop:"#cbb992",
+  deskTop:"#bd9264", deskTop2:"#cba16f", deskStroke:"#a67c4f", deskBase:"#7a5c3a",
+  monitor:"#3a372f", screen:"#dfe9d8", screenOff:"#cfc9bb", scrLine:"#5d7fa3",
+  lampWork:"#6f9a63", lampFree:"#8f887a",
+  kb:"#e8dfca", kbStroke:"#c9bb9c",
+  chair:"#9a9083", chairBase:"#8a8074",
+  sofa1:"#c9b891", sofa2:"#d4c49c", sofa3:"#b9a985", sofaLine:"#b3a17c",
+  pot:"#a76a4a", plantA:"#6f9a63", plantB:"#7fae72", plantC:"#5d8a52",
+  rack:"#4a463f", rackStroke:"#373430", rackSlot:"#5f5a52", rackLabel:"#8b8474", rackLed:"#6f9a63",
+  table:"#cba16f", table2:"#d6b285", tableStroke:"#a67c4f",
+  laptop:"#3a372f", laptopScreen:"#dfe9d8",
+  glassFill:"rgba(158,186,196,.28)", glassStroke:"rgba(110,140,150,.5)", glassTop:"rgba(110,140,150,.9)",
+  shadow:"rgba(47,43,37,.18)",
+  tagFill:"rgba(250,247,240,.95)", tagStroke:"#ded3be", tagInk:"#2f2b25",
+  spk:"#4f7fa8", sel:"#d07a2a",
+};
+const NIGHT={
+  tileA:"#37322a", tileB:"#322d26", meetA:"#2c332f", meetB:"#293029",
+  rugA:"#453a25", rugB:"#403522", tileStroke:"#2a2620",
+  skirtA:"#3c352b", skirtB:"#332d25", wall:"#2c2822", wallTop:"#4a4335",
+  deskTop:"#6e5437", deskTop2:"#7a5e3e", deskStroke:"#5a442c", deskBase:"#4a3626",
+  monitor:"#1d1b17", screen:"#f4e6b8", screenOff:"#3a352c", scrLine:"#8a6b3a",
+  lampWork:"#8fb884", lampFree:"#6b6355",
+  kb:"#4a4234", kbStroke:"#383127",
+  chair:"#4e4638", chairBase:"#413a2f",
+  sofa1:"#5a4e36", sofa2:"#655738", sofa3:"#4e432d", sofaLine:"#4a3f2c",
+  pot:"#7a4f36", plantA:"#4f7046", plantB:"#5c7f51", plantC:"#44603b",
+  rack:"#232019", rackStroke:"#171512", rackSlot:"#332f28", rackLabel:"#a89e8c", rackLed:"#8fb884",
+  table:"#6e5437", table2:"#7a5e3e", tableStroke:"#5a442c",
+  laptop:"#1d1b17", laptopScreen:"#f4e6b8",
+  glassFill:"rgba(130,160,180,.14)", glassStroke:"rgba(130,160,180,.30)", glassTop:"rgba(150,180,200,.55)",
+  shadow:"rgba(0,0,0,.35)",
+  tagFill:"rgba(32,29,24,.95)", tagStroke:"#4a4236", tagInk:"#ece5d8",
+  spk:"#6f9cc2", sel:"#d98936",
+};
+
+/* ═══════════════ Proyeksi isometrik ═══════════════ */
+const TW = 58, TH = 29, OX = 470, OY = 88;
+const iso = (i,j)=>({ x: OX + (i-j)*(TW/2), y: OY + (i+j)*(TH/2) });
+const NS = "http://www.w3.org/2000/svg";
+const stage = document.getElementById("stage");
+const el = (name, attrs={})=>{ const n=document.createElementNS(NS,name);
+  for(const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+const poly = (pts, attrs)=> el("polygon", { points: pts.map(p=>p.x+" "+p.y).join(" "), ...attrs });
+const dia = (c, w=TW, h=TH)=>([
+  {x:c.x, y:c.y-h/2},{x:c.x+w/2, y:c.y},{x:c.x, y:c.y+h/2},{x:c.x-w/2, y:c.y}
+]);
+const P=(i,j)=>({x:OX+(i-j)*(TW/2), y:OY+(i+j)*(TH/2)});
+
+/* ═══════════════ Data agent ═══════════════ */
+const AGENTS={
+  atlas :{name:"Atlas", role:"Manager",   color:"#b06a3b", status:"work", pos:[4,1.35]},
+  bimo  :{name:"Bimo",  role:"Backend",   color:"#5d7fa3", status:"work", pos:[6,1.35]},
+  citra :{name:"Citra", role:"Design",    color:"#b0524d", status:"meet", pos:[8,0.9]},
+  damar :{name:"Damar", role:"QA",        color:"#6d8f57", status:"meet", pos:[10,0.9]},
+  eka   :{name:"Eka",   role:"Research",  color:"#a9873f", status:"meet", pos:[9,2.4]},
+  fajar :{name:"Fajar", role:"Ops",       color:"#5f8f84", status:"a2a",  pos:[6,4]},
+  gilang:{name:"Gilang",role:"Support",   color:"#9078a0", status:"idle", pos:[1,6.6]},
+};
+const STATUS_LABEL={work:"bekerja", meet:"meeting", a2a:"A2A", idle:"idle"};
+let curAgent="bimo";
+let agentEls={}, spkEl=null;
+
+/* ═══════════════ Scene builder ═══════════════ */
+function buildScene(S){
+  const items=[]; const add=(d,n)=>items.push({depth:d,node:n});
+  const GW=12, GH=9;
+  const inMeet=(i,j)=> i>=7 && j<=3;
+  const inRug =(i,j)=> i<=2 && j>=6;
+
+  for(let j=0;j<GH;j++) for(let i=0;i<GW;i++){
+    const c=iso(i,j);
+    let fill=((i+j)%2===0)?S.tileA:S.tileB;
+    if(inMeet(i,j)) fill=((i+j)%2===0)?S.meetA:S.meetB;
+    if(inRug(i,j))  fill=((i+j)%2===0)?S.rugA:S.rugB;
+    add(i+j, poly(dia(c), { fill, stroke:S.tileStroke, "stroke-width":.6 }));
+  }
+  const c00=iso(0,0), cW=iso(GW-1,0), cH=iso(0,GH-1), cWH=iso(GW-1,GH-1);
+  const topC={x:c00.x,y:c00.y-TH/2}, rightC={x:cW.x+TW/2,y:cW.y},
+        botC={x:cWH.x,y:cWH.y+TH/2}, leftC={x:cH.x-TW/2,y:cH.y};
+  add(99, poly([leftC,botC,{x:botC.x,y:botC.y+16},{x:leftC.x,y:leftC.y+16}],{fill:S.skirtA}));
+  add(99, poly([botC,rightC,{x:rightC.x,y:rightC.y+16},{x:botC.x,y:botC.y+16}],{fill:S.skirtB}));
+
+  function wall(a,b,h){
+    add(a.x+b.x, poly([a,b,{x:b.x,y:b.y-h},{x:a.x,y:a.y-h}],{fill:S.wall}));
+    add(a.x+b.x+.1, el("line",{x1:a.x,y1:a.y-h,x2:b.x,y2:b.y-h,stroke:S.wallTop,"stroke-width":2}));
+  }
+  wall({x:leftC.x,y:leftC.y},{x:topC.x,y:topC.y},26);
+  wall({x:topC.x,y:topC.y},{x:rightC.x,y:rightC.y},26);
+
+  function glass(p1,p2,h=42){
+    const g=el("g",{});
+    g.appendChild(poly([p1,p2,{x:p2.x,y:p2.y-h},{x:p1.x,y:p1.y-h}],
+      {fill:S.glassFill, stroke:S.glassStroke,"stroke-width":1}));
+    g.appendChild(el("line",{x1:p1.x,y1:p1.y-h,x2:p2.x,y2:p2.y-h,stroke:S.glassTop,"stroke-width":1.6}));
+    add(p1.x+p2.x+p1.y+p2.y, g);
+  }
+  glass(P(6.5,3.5),P(8.5,3.5)); glass(P(10.5,3.5),P(11.5,3.5));
+  glass(P(6.5,-0.5),P(6.5,0.5)); glass(P(6.5,2.5),P(6.5,3.5));
+
+  function desk(i,j,status){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(poly([{x:c.x-20,y:c.y+4},{x:c.x+20,y:c.y+4},{x:c.x+20,y:c.y+12},{x:c.x-20,y:c.y+12}],{fill:S.deskBase}));
+    g.appendChild(poly(dia(c,TW*.82,TH*.82),{fill:S.deskTop,stroke:S.deskStroke,"stroke-width":1}));
+    g.appendChild(poly(dia({x:c.x,y:c.y-2},TW*.7,TH*.6),{fill:S.deskTop2}));
+    const m=el("g",{});
+    m.appendChild(el("rect",{x:c.x-11,y:c.y-26,width:22,height:15,rx:2,fill:S.monitor}));
+    const lamp = status==="work" ? S.lampWork : S.lampFree;
+    m.appendChild(el("rect",{x:c.x-9,y:c.y-24,width:18,height:11,rx:1,fill: status==="work"?S.screen:S.screenOff}));
+    if(status==="work"){
+      [["l1",-7,-22,7],["l2",-7,-19,10],["l3",-7,-16,5]].forEach(([cls,x,y,w])=>{
+        m.appendChild(el("rect",{x:c.x+x,y:c.y+y,width:w,height:1.6,fill:S.scrLine,class:"screen-line "+cls}));
+      });
+    }
+    m.appendChild(el("rect",{x:c.x-2,y:c.y-11,width:4,height:3,fill:S.monitor}));
+    m.appendChild(el("circle",{cx:c.x+14,cy:c.y-22,r:2.6,fill:lamp}));
+    g.appendChild(m);
+    g.appendChild(el("rect",{x:c.x-7,y:c.y-7,width:14,height:4,rx:1.5,fill:S.kb,stroke:S.kbStroke,"stroke-width":.5}));
+    add(i+j+.2,g);
+  }
+  function chair(i,j){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(el("ellipse",{cx:c.x,cy:c.y+3,rx:9,ry:5,fill:S.chairBase}));
+    g.appendChild(el("rect",{x:c.x-7,y:c.y-8,width:14,height:9,rx:3,fill:S.chair}));
+    add(i+j+.1,g);
+  }
+  function sofa(i,j){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(el("ellipse",{cx:c.x,cy:c.y+8,rx:34,ry:12,fill:S.sofa3}));
+    g.appendChild(el("rect",{x:c.x-30,y:c.y-16,width:60,height:18,rx:8,fill:S.sofa1}));
+    g.appendChild(el("rect",{x:c.x-30,y:c.y-6,width:60,height:12,rx:6,fill:S.sofa2}));
+    g.appendChild(el("line",{x1:c.x,y1:c.y-14,x2:c.x,y2:c.y+4,stroke:S.sofaLine,"stroke-width":2}));
+    add(i+j+.3,g);
+  }
+  function plant(i,j){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(poly([{x:c.x-7,y:c.y+2},{x:c.x+7,y:c.y+2},{x:c.x+5,y:c.y+12},{x:c.x-5,y:c.y+12}],{fill:S.pot}));
+    [[S.plantA,-8,-16,.9],[S.plantB,0,-22,1.1],[S.plantC,8,-14,.8]].forEach(([col,dx,dy,s])=>{
+      g.appendChild(el("ellipse",{cx:c.x+dx,cy:c.y+dy,rx:6*s,ry:11*s,fill:col,transform:`rotate(${dx*2} ${c.x+dx} ${c.y+dy})`}));
+    });
+    add(i+j+.3,g);
+  }
+  function rack(i,j){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(poly([{x:c.x-14,y:c.y+6},{x:c.x+14,y:c.y+6},{x:c.x+14,y:c.y+12},{x:c.x-14,y:c.y+12}],{fill:S.rackStroke}));
+    g.appendChild(el("rect",{x:c.x-14,y:c.y-42,width:28,height:48,rx:3,fill:S.rack,stroke:S.rackStroke,"stroke-width":1}));
+    [0,1,2,3].forEach(k=>{
+      g.appendChild(el("rect",{x:c.x-10,y:c.y-36+k*10,width:20,height:5,rx:1,fill:S.rackSlot}));
+    });
+    g.appendChild(el("circle",{cx:c.x+8,cy:c.y-38,r:2,fill:S.rackLed}));
+    const t=el("text",{x:c.x,y:c.y+22,"text-anchor":"middle","font-size":9,fill:S.rackLabel,"font-weight":600});
+    t.textContent="vps-01"; g.appendChild(t);
+    add(i+j+.25,g);
+  }
+  function meetTable(i,j){
+    const c=iso(i,j), g=el("g",{});
+    g.appendChild(el("rect",{x:c.x-4,y:c.y-2,width:8,height:14,fill:S.deskBase}));
+    g.appendChild(el("ellipse",{cx:c.x,cy:c.y-4,rx:46,ry:22,fill:S.table,stroke:S.tableStroke,"stroke-width":1.2}));
+    g.appendChild(el("ellipse",{cx:c.x,cy:c.y-6,rx:38,ry:17,fill:S.table2}));
+    [[-18,-8],[16,-12],[2,4]].forEach(([dx,dy])=>{
+      g.appendChild(el("rect",{x:c.x+dx-6,y:c.y+dy-4,width:12,height:8,rx:1,fill:S.laptop}));
+      g.appendChild(el("rect",{x:c.x+dx-5,y:c.y+dy-3,width:10,height:6,rx:.5,fill:S.laptopScreen}));
+    });
+    add(i+j+.3,g);
+  }
+
+  const busyDesks={"4,2":"work","6,2":"work"};
+  [[2,2],[4,2],[6,2],[2,4],[4,4],[6,4]].forEach(([i,j])=>{
+    desk(i,j,busyDesks[i+","+j]||"free"); chair(i,j+0.75);
+  });
+  sofa(1,7); plant(0.4,1.2); plant(10.8,4.6); rack(1,0.4); meetTable(9,1.6);
+
+  /* agent */
+  agentEls={};
+  const agentLayer=el("g",{});
+  const mk=(id,a)=>{
+    const g=el("g",{class:"agent",tabindex:0,role:"button","aria-label":a.name+" — "+a.role});
+    const ring=el("ellipse",{cx:0,cy:4,rx:15,ry:6.5,fill:"none",stroke:S.sel,"stroke-width":1.6,
+      "stroke-dasharray":"3 3",class:"sel-ring",visibility:"hidden"});
+    g.appendChild(el("ellipse",{cx:0,cy:4,rx:11,ry:4.5,fill:S.shadow}));
+    g.appendChild(ring);
+    g.appendChild(el("rect",{x:-8,y:-18,width:16,height:20,rx:6,fill:a.color}));
+    g.appendChild(el("circle",{cx:0,cy:-24,r:7.5,fill:"#e8c9a8",stroke:"#d3ad84","stroke-width":1}));
+    g.appendChild(el("path",{d:"M -7 -25 a 7.5 7.5 0 0 1 15 0 l 0 -3 a 7.5 7.5 0 0 0 -15 0 z",fill:"#4a3b2c"}));
+    if(a.status==="work"){
+      g.appendChild(el("rect",{x:-9,y:-12,width:5,height:8,rx:2,fill:a.color,class:"typing-arm"}));
+      g.appendChild(el("rect",{x:4,y:-12,width:5,height:8,rx:2,fill:a.color,class:"typing-arm r"}));
+    }
+    const tag=el("g",{});
+    tag.appendChild(el("rect",{x:-22,y:8,width:44,height:13,rx:6.5,fill:S.tagFill,stroke:S.tagStroke,"stroke-width":.8}));
+    const tt=el("text",{x:0,y:17.5,"text-anchor":"middle","font-size":9,"font-weight":700,fill:S.tagInk});
+    tt.textContent=a.name; tag.appendChild(tt);
+    g.appendChild(tag);
+    g.addEventListener("click",()=>selectAgent(id));
+    g.addEventListener("keydown",e=>{ if(e.key==="Enter") selectAgent(id); });
+    agentEls[id]=g; agentLayer.appendChild(g);
+  };
+  for(const id in AGENTS) mk(id,AGENTS[id]);
+  for(const id in AGENTS) placeAgent(id,AGENTS[id].pos[0],AGENTS[id].pos[1]);
+
+  spkEl=el("ellipse",{cx:0,cy:0,rx:16,ry:7,fill:"none",stroke:S.spk,"stroke-width":2,"stroke-dasharray":"4 3"});
+  agentLayer.appendChild(spkEl);
+
+  items.sort((a,b)=>a.depth-b.depth).forEach(it=>stage.appendChild(it.node));
+  stage.appendChild(agentLayer);
+
+  /* pulihkan seleksi */
+  const sel=agentEls[curAgent];
+  if(sel) sel.querySelector(".sel-ring").setAttribute("visibility","visible");
+}
+
+function placeAgent(id,i,j,bob=0){
+  const n=agentEls[id]; if(!n) return;
+  const c=iso(i,j); n.setAttribute("transform",`translate(${c.x} ${c.y+bob})`);
+}
+
+/* ═══════════════ Tema ═══════════════ */
+const themeDayBtn=document.getElementById("themeDay"), themeNightBtn=document.getElementById("themeNight");
+let theme="day";
+function applyTheme(t){
+  theme=t;
+  document.documentElement.dataset.theme=t;
+  themeDayBtn.setAttribute("aria-pressed", t==="day"?"true":"false");
+  themeNightBtn.setAttribute("aria-pressed", t==="night"?"true":"false");
+  stage.innerHTML="";
+  buildScene(t==="night"?NIGHT:DAY);
+  tickSpeaker();
+}
+themeDayBtn.onclick=()=>applyTheme("day");
+themeNightBtn.onclick=()=>applyTheme("night");
+
+/* ═══════════════ Animasi ═══════════════ */
+const PATH=[[6,4],[7,3.6],[7.6,3],[7.6,2.2],[7,1.8],[6.6,1.7]];
+let pi=0, dir=1;
+function tickWalk(){
+  pi+=dir;
+  if(pi>=PATH.length-1){dir=-1; pi=PATH.length-1; setTimeout(tickWalk,2200); placeAgent("fajar",...PATH[pi]); return;}
+  if(pi<=0){dir=1; pi=0; setTimeout(tickWalk,1600); placeAgent("fajar",...PATH[pi]); return;}
+  const bob=(pi%2===0)?-1.5:0;
+  placeAgent("fajar",PATH[pi][0],PATH[pi][1],bob);
+  setTimeout(tickWalk,650);
+}
+setTimeout(tickWalk,1200);
+
+const meetIds=["citra","damar","eka"];
+let spkIdx=0;
+function tickSpeaker(){
+  const a=AGENTS[meetIds[spkIdx]], c=iso(a.pos[0],a.pos[1]);
+  if(spkEl){ spkEl.setAttribute("cx",c.x); spkEl.setAttribute("cy",c.y+4); }
+  document.querySelectorAll(".participant").forEach((p,k)=>{
+    p.classList.toggle("speaking", k===spkIdx);
+  });
+  spkIdx=(spkIdx+1)%meetIds.length;
+}
+setInterval(tickSpeaker,2400);
+applyTheme("day");
+
+/* ═══════════════ Panel kanan ═══════════════ */
+const tabs=document.querySelectorAll(".tabs button");
+tabs.forEach(b=>b.addEventListener("click",()=>{
+  tabs.forEach(x=>x.setAttribute("aria-selected", x===b?"true":"false"));
+  document.querySelectorAll(".panel").forEach(p=>p.hidden=true);
+  document.getElementById("panel-"+b.dataset.tab).hidden=false;
+}));
+function openTab(name){ document.querySelector(`.tabs button[data-tab="${name}"]`).click(); }
+
+/* Chat */
+const CHATS={
+  atlas:{tool:"tool: review_board · sprint 12", msgs:[
+    ["them","Standup selesai. Satu-satunya penghalang minggu ini: kartu audit tunnel masih menunggu persetujuanmu."],
+    ["me","Prioritaskan itu. Kalau lolos, kita rilis Jumat."],
+    ["them","Siap. Kujadwalkan ulang sisanya dan kuberi tahu Fajar soal tunnel cadangan."]]},
+  bimo:{tool:"tool: edit_file · src/api/kanban.ts", msgs:[
+    ["them","Integrasi gateway hampir selesai — tinggal mapping status review. Ada dua status Hermes yang tidak punya kolom padanannya."],
+    ["me","Petakan yang paling dekat, catat sisanya di kartu."],
+    ["them","Oke, kumasukkan ke catatan kartu sebelum masuk review besok."]]},
+  citra:{tool:"tool: generate_asset · sprite-meja-v3", msgs:[
+    ["them","Aku usulkan warna meja diperhangat supaya avatar lebih menonjol. Contohnya sudah kuletakkan di kartu desain."],
+    ["me","Terlihat bagus. Lanjutkan."]]},
+  damar:{tool:"tool: run_tests · audit-tunnel.spec", msgs:[
+    ["them","Audit tunnel: 14 dari 16 cek lolos. Dua sisanya butuh keputusanmu — aku tulis ringkasannya di kartu review."],
+    ["me","Kubaca sore ini."]]},
+  eka:{tool:"tool: web_search · tren virtual-office", msgs:[
+    ["them","Risetku selesai: pola yang berulang di produk sejenis — state machine posisi dan idle tanpa token. Sudah kurangkum di kartu riset."]]},
+  fajar:{tool:"tool: exec · cloudflared status", msgs:[
+    ["them","Tunnel utama stabil 14 hari. Aku lagi siapkan jalur cadangan lewat koneksi kedua, sesuai hasil standup."]]},
+  gilang:{tool:"", msgs:[
+    ["them","Antrean tiket kosong. Aku standby di sofa — panggil saja kalau ada yang masuk."]]},
+};
+const faceEl=document.getElementById("chatFace"), nameEl=document.getElementById("chatName"),
+      roleEl=document.getElementById("chatRole"), statusEl=document.getElementById("chatStatus"),
+      toolEl=document.getElementById("chatTool"), msgsEl=document.getElementById("chatMsgs"),
+      inputEl=document.getElementById("composerInput");
+function renderChat(id){
+  const a=AGENTS[id], c=CHATS[id];
+  faceEl.textContent=a.name.slice(0,2).toUpperCase(); faceEl.style.background=a.color;
+  nameEl.textContent=a.name; roleEl.textContent=a.role;
+  statusEl.className="chip "+a.status; statusEl.innerHTML="<i></i>"+STATUS_LABEL[a.status];
+  toolEl.textContent=c.tool||"tidak ada tool aktif — idle";
+  toolEl.style.display=c.tool?"block":"none";
+  msgsEl.innerHTML="";
+  c.msgs.forEach(([who,text])=>{
+    const d=document.createElement("div"); d.className="msg "+who; d.textContent=text;
+    const t=document.createElement("small"); t.textContent=who==="me"?"kamu · baru saja":a.name+" · baru saja";
+    d.appendChild(t); msgsEl.appendChild(d);
+  });
+  if(a.status==="work"){
+    const t=document.createElement("div"); t.className="typing-ind"; t.innerHTML="<i></i><i></i><i></i>";
+    msgsEl.appendChild(t);
+  }
+  inputEl.placeholder="Ketik pesan untuk "+a.name+"…";
+}
+function selectAgent(id){
+  curAgent=id; renderChat(id); openTab("chat");
+  document.querySelectorAll(".sel-ring").forEach(r=>r.setAttribute("visibility","hidden"));
+  const sel=agentEls[id]; if(sel) sel.querySelector(".sel-ring").setAttribute("visibility","visible");
+}
+document.getElementById("sendBtn").addEventListener("click",()=>{
+  if(!inputEl.value.trim())return;
+  CHATS[curAgent].msgs.push(["me",inputEl.value.trim()]);
+  inputEl.value=""; renderChat(curAgent);
+});
+inputEl.addEventListener("keydown",e=>{ if(e.key==="Enter") document.getElementById("sendBtn").click(); });
+renderChat("bimo");
+
+/* Kanban */
+const COLS=[
+  {key:"todo", label:"To do", cards:[
+    {t:"Riset pola virtual office (lanjutan)", o:"eka"},
+    {t:"Copy landing page v0.1", o:"citra"}]},
+  {key:"doing", label:"Doing", cards:[
+    {t:"Integrasi gateway Hermes", o:"bimo"}]},
+  {key:"review", label:"Review", cards:[
+    {t:"Audit keamanan tunnel", o:"damar", review:true}]},
+  {key:"done", label:"Done", cards:[
+    {t:"Setup cloudflared di vps-01", o:"fajar"},
+    {t:"Sprite karakter v1", o:"citra"}]},
+];
+const board=document.getElementById("board");
+function renderBoard(){
+  board.innerHTML="";
+  COLS.forEach(col=>{
+    const c=document.createElement("div"); c.className="col";
+    c.innerHTML=`<h5>${col.label}<span>${col.cards.length}</span></h5>`;
+    col.cards.forEach(card=>{
+      const a=AGENTS[card.o];
+      const d=document.createElement("div"); d.className="card"+(card.review?" review":"");
+      d.innerHTML=`${card.t}<div class="owner"><i style="background:${a.color}"></i>${a.name}</div>`;
+      if(card.review){
+        const act=document.createElement("div"); act.className="actions";
+        const ok=document.createElement("button"); ok.className="btn small"; ok.textContent="Setujui";
+        ok.onclick=()=>{ col.cards=col.cards.filter(x=>x!==card);
+          COLS.find(x=>x.key==="done").cards.push(card); renderBoard(); pushEvent("Kamu menyetujui «Audit keamanan tunnel»"); };
+        const rev=document.createElement("button"); rev.className="btn ghost small"; rev.textContent="Minta revisi";
+        act.append(ok,rev); d.appendChild(act);
+      }
+      c.appendChild(d);
+    });
+    board.appendChild(c);
+  });
+}
+renderBoard();
+
+/* Meeting panel */
+const parts=["citra","damar","eka"];
+document.getElementById("meetParts").innerHTML=parts.map(id=>{
+  const a=AGENTS[id];
+  return `<span class="participant"><i style="background:${a.color}"></i>${a.name}</span>`;
+}).join("");
+
+/* Cron */
+const CRONS=[
+  {t:"Laporan harian", s:"17:00 · setiap hari", o:"atlas", on:true},
+  {t:"Backup state kantor", s:"tiap 6 jam", o:"fajar", on:true},
+  {t:"Audit keamanan", s:"Senin 09:00", o:"damar", on:false},
+  {t:"Ringkasan metrik", s:"08:00 · setiap hari", o:"eka", on:true},
+];
+const cronList=document.getElementById("cronList");
+cronList.style.display="flex"; cronList.style.flexDirection="column"; cronList.style.gap="10px";
+CRONS.forEach(c=>{
+  const a=AGENTS[c.o];
+  const row=document.createElement("div"); row.className="cron-row";
+  row.innerHTML=`<div class="info"><b>${c.t}</b><small>${c.s} · ${a.name}</small></div>`;
+  const run=document.createElement("button"); run.className="btn ghost small"; run.textContent="Jalankan";
+  const sw=document.createElement("button"); sw.className="switch";
+  sw.setAttribute("role","switch"); sw.setAttribute("aria-checked",c.on?"true":"false");
+  sw.setAttribute("aria-label","Aktifkan "+c.t);
+  sw.onclick=()=>sw.setAttribute("aria-checked", sw.getAttribute("aria-checked")==="true"?"false":"true");
+  row.append(run,sw); cronList.appendChild(row);
+});
+
+/* Event feed */
+const EVENTS=[
+  ["09:32","Meeting «Standup Pagi» dimulai di Ruang Kaca"],
+  ["09:41","Fajar memanggil Bimo lewat A2A"],
+  ["09:47","Damar mengirim «Audit tunnel» ke kolom Review"],
+  ["10:02","Eka menyelesaikan kartu «Riset pola virtual office»"],
+  ["10:15","Cron «Backup state kantor» selesai dalam 4,2 dtk"],
+];
+const feedUl=document.getElementById("events"); let evIdx=0;
+function pushEvent(text){
+  const li=document.createElement("li");
+  const now=new Date(), hh=String(now.getHours()).padStart(2,"0"), mm=String(now.getMinutes()).padStart(2,"0");
+  li.innerHTML=`<time>${hh}:${mm}</time><span>${text}</span>`;
+  feedUl.prepend(li);
+  while(feedUl.children.length>3) feedUl.lastChild.remove();
+}
+[EVENTS[2],EVENTS[1],EVENTS[0]].forEach(e=>{
+  const li=document.createElement("li"); li.innerHTML=`<time>${e[0]}</time><span>${e[1]}</span>`;
+  feedUl.appendChild(li);
+});
+setInterval(()=>{ evIdx=(evIdx+1)%EVENTS.length;
+  const li=document.createElement("li"); li.style.opacity="0";
+  li.innerHTML=`<time>${EVENTS[evIdx][0]}</time><span>${EVENTS[evIdx][1]}</span>`;
+  feedUl.prepend(li); requestAnimationFrame(()=>li.style.opacity="1");
+  while(feedUl.children.length>3) feedUl.lastChild.remove();
+},6000);
+</script>
+</body>
+</html>
