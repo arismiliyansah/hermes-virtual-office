@@ -16,6 +16,7 @@ import {
   type AgentRow,
   type AuditRow,
   type MinuteRow,
+  type TaskRow,
 } from "../src/db";
 
 const db = (env as unknown as { DB: D1Database }).DB;
@@ -87,10 +88,9 @@ describe("agents", () => {
     expect(agent?.machine_id).toBe("main");
   });
 
-  it("upserts new agents and updates existing ones", async () => {
+  it("upserts new agents and updates Hermes-owned fields", async () => {
     await upsertAgent(db, {
       id: "agent-1",
-      machine_id: "workstation-a",
       name: "Hermes",
       role: "assistant",
       color: "#7c5cff",
@@ -98,29 +98,49 @@ describe("agents", () => {
     });
     await upsertAgent(db, {
       id: "agent-1",
-      machine_id: "workstation-b",
       name: "Hermes Prime",
       role: "reviewer",
-      color: "#ffcc00",
-      desk_index: 1,
     });
 
-    const agents = await listAgents(db);
-    const matching = agents.filter((agent) => agent.id === "agent-1");
+    const matching = (await listAgents(db)).filter((agent) => agent.id === "agent-1");
 
     expect(matching).toHaveLength(1);
     expect(matching[0]).toMatchObject({
       id: "agent-1",
-      machine_id: "workstation-b",
+      machine_id: "main",
       name: "Hermes Prime",
       role: "reviewer",
-      color: "#ffcc00",
-      desk_index: 1,
+      color: "#7c5cff",
+      desk_index: 2,
     });
   });
 
-  it("applies machine_id 'main' when an upsert omits it", async () => {
-    await upsertAgent(db, { id: "agent-2" });
+  it("preserves machine_id on conflict", async () => {
+    await db
+      .prepare("INSERT INTO agents (id, machine_id, name, role) VALUES (?, ?, ?, ?)")
+      .bind("agent-preserved", "workstation-a", "Old name", "assistant")
+      .run();
+
+    await upsertAgent(db, {
+      id: "agent-preserved",
+      name: "Hermes",
+      role: "assistant",
+    });
+
+    const agent = await db
+      .prepare("SELECT * FROM agents WHERE id = ?")
+      .bind("agent-preserved")
+      .first<AgentRow>();
+
+    expect(agent).toMatchObject({
+      id: "agent-preserved",
+      machine_id: "workstation-a",
+      name: "Hermes",
+    });
+  });
+
+  it("defaults machine_id to 'main' for agents inserted through upsert", async () => {
+    await upsertAgent(db, { id: "agent-2", name: "Hermes", role: "assistant" });
 
     const agent = await db
       .prepare("SELECT * FROM agents WHERE id = ?")
@@ -138,14 +158,13 @@ describe("tasks", () => {
     expect(columns.results.map((column) => column.name)).toContain("office_label");
   });
 
-  it("upserts tasks and lists them by most recently updated", async () => {
+  it("upserts tasks and lists them", async () => {
     await upsertTask(db, {
       id: "task-1",
       title: "Write schema",
       status: "todo",
       office_label: "Desk 1",
       owner_agent: "agent-1",
-      updated_at: "2026-01-01T00:00:00.000Z",
     });
     await upsertTask(db, {
       id: "task-2",
@@ -153,7 +172,6 @@ describe("tasks", () => {
       status: "todo",
       office_label: "Desk 2",
       owner_agent: "agent-2",
-      updated_at: "2026-01-02T00:00:00.000Z",
     });
     await upsertTask(db, {
       id: "task-1",
@@ -161,17 +179,102 @@ describe("tasks", () => {
       status: "done",
       office_label: "Desk 1",
       owner_agent: "agent-1",
-      updated_at: "2026-01-03T00:00:00.000Z",
     });
 
     const tasks = await listTasks(db);
 
-    expect(tasks.map((task) => task.id)).toEqual(["task-1", "task-2"]);
-    expect(tasks[0]).toMatchObject({
+    expect(tasks.map((task) => task.id).sort()).toEqual(["task-1", "task-2"]);
+    expect(tasks.find((task) => task.id === "task-1")).toMatchObject({
       id: "task-1",
       status: "done",
       office_label: "Desk 1",
     });
+  });
+
+  it("preserves an existing office_label when an upsert omits it", async () => {
+    await upsertTask(db, {
+      id: "task-label",
+      title: "Local label",
+      status: "todo",
+      owner_agent: null,
+      office_label: "Desk 9",
+    });
+
+    await upsertTask(db, {
+      id: "task-label",
+      title: "Local label",
+      status: "in_progress",
+      owner_agent: "agent-1",
+    });
+
+    const task = await db
+      .prepare("SELECT * FROM tasks WHERE id = ?")
+      .bind("task-label")
+      .first<TaskRow>();
+
+    expect(task).toMatchObject({
+      status: "in_progress",
+      owner_agent: "agent-1",
+      office_label: "Desk 9",
+    });
+  });
+
+  it("updates office_label without touching Hermes-owned fields", async () => {
+    await upsertTask(db, {
+      id: "task-relabel",
+      title: "Keep title",
+      status: "todo",
+      owner_agent: "agent-1",
+      office_label: "Desk 1",
+    });
+
+    await upsertTask(db, {
+      id: "task-relabel",
+      title: "Keep title",
+      status: "todo",
+      owner_agent: "agent-1",
+      office_label: "Desk 2",
+    });
+
+    const task = await db
+      .prepare("SELECT * FROM tasks WHERE id = ?")
+      .bind("task-relabel")
+      .first<TaskRow>();
+
+    expect(task).toMatchObject({
+      title: "Keep title",
+      status: "todo",
+      owner_agent: "agent-1",
+      office_label: "Desk 2",
+    });
+  });
+
+  it("refreshes updated_at on update", async () => {
+    await upsertTask(db, {
+      id: "task-updated",
+      title: "Timestamps",
+      status: "todo",
+      owner_agent: null,
+    });
+    await db
+      .prepare("UPDATE tasks SET updated_at = '2000-01-01 00:00:00' WHERE id = ?")
+      .bind("task-updated")
+      .run();
+
+    await upsertTask(db, {
+      id: "task-updated",
+      title: "Timestamps",
+      status: "done",
+      owner_agent: null,
+    });
+
+    const task = await db
+      .prepare("SELECT * FROM tasks WHERE id = ?")
+      .bind("task-updated")
+      .first<TaskRow>();
+
+    expect(task?.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    expect(task?.updated_at).not.toBe("2000-01-01 00:00:00");
   });
 });
 

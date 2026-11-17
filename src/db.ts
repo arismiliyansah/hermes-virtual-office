@@ -52,8 +52,22 @@ export interface NewUser {
   passwordHash: string;
 }
 
-export type AgentInput = Pick<AgentRow, "id"> & Partial<Omit<AgentRow, "id">>;
-export type TaskInput = Pick<TaskRow, "id"> & Partial<Omit<TaskRow, "id">>;
+export interface AgentInput {
+  id: string;
+  name: string;
+  role: string;
+  color?: string | null;
+  desk_index?: number | null;
+}
+
+export interface TaskInput {
+  id: string;
+  title: string;
+  status: string;
+  owner_agent: string | null;
+  office_label?: string | null;
+}
+
 export type MeetingInput = Pick<MeetingRow, "id"> & Partial<Omit<MeetingRow, "id">>;
 
 export interface MinuteInput {
@@ -99,20 +113,18 @@ export async function listAgents(db: D1Database): Promise<AgentRow[]> {
 export async function upsertAgent(db: D1Database, agent: AgentInput): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO agents (id, machine_id, name, role, color, desk_index)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO agents (id, name, role, color, desk_index)
+       VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(id) DO UPDATE SET
-         machine_id = excluded.machine_id,
          name = excluded.name,
          role = excluded.role,
-         color = excluded.color,
-         desk_index = excluded.desk_index`,
+         color = COALESCE(excluded.color, agents.color),
+         desk_index = COALESCE(excluded.desk_index, agents.desk_index)`,
     )
     .bind(
       agent.id,
-      agent.machine_id ?? "main",
-      agent.name ?? null,
-      agent.role ?? null,
+      agent.name,
+      agent.role,
       agent.color ?? null,
       agent.desk_index ?? null,
     )
@@ -134,22 +146,21 @@ export async function listTasks(db: D1Database): Promise<TaskRow[]> {
 export async function upsertTask(db: D1Database, task: TaskInput): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO tasks (id, title, status, office_label, owner_agent, updated_at)
-       VALUES (?, ?, ?, ?, ?, COALESCE(?, datetime('now')))
+      `INSERT INTO tasks (id, title, status, owner_agent, office_label, updated_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
        ON CONFLICT(id) DO UPDATE SET
          title = excluded.title,
          status = excluded.status,
-         office_label = excluded.office_label,
          owner_agent = excluded.owner_agent,
-         updated_at = excluded.updated_at`,
+         office_label = COALESCE(excluded.office_label, tasks.office_label),
+         updated_at = datetime('now')`,
     )
     .bind(
       task.id,
-      task.title ?? null,
-      task.status ?? null,
+      task.title,
+      task.status,
+      task.owner_agent,
       task.office_label ?? null,
-      task.owner_agent ?? null,
-      task.updated_at ?? null,
     )
     .run();
 }
