@@ -183,6 +183,45 @@ describe("KanbanPanel", () => {
     expect(done?.textContent).toContain("Audit tunnel");
   });
 
+  it("moves a card to another column with the status select", async () => {
+    mocks.listTasks
+      .mockResolvedValueOnce([task({ status: "todo" })])
+      .mockResolvedValueOnce([task({ status: "done" })]);
+
+    const view = render(() => <KanbanPanel />);
+
+    await screen.findByText("Audit tunnel");
+    const select = screen.getByLabelText("Status untuk Audit tunnel");
+    expect((select as HTMLSelectElement).value).toBe("todo");
+
+    fireEvent.change(select, { target: { value: "done" } });
+
+    await waitFor(() => {
+      expect(mocks.updateTaskStatus).toHaveBeenCalledWith("t1", "done");
+    });
+    await waitFor(() => {
+      expect(mocks.listTasks).toHaveBeenCalledTimes(2);
+    });
+
+    const done = view.container.querySelector('[data-column="done"]');
+    expect(done?.textContent).toContain("Audit tunnel");
+  });
+
+  it("can move a review card to Doing without using Setujui", async () => {
+    mocks.listTasks.mockResolvedValue([task({ status: "review" })]);
+
+    render(() => <KanbanPanel />);
+
+    await screen.findByText("Audit tunnel");
+    fireEvent.change(screen.getByLabelText("Status untuk Audit tunnel"), {
+      target: { value: "doing" },
+    });
+
+    await waitFor(() => {
+      expect(mocks.updateTaskStatus).toHaveBeenCalledWith("t1", "doing");
+    });
+  });
+
   it("shows Setujui on a review card", async () => {
     mocks.listTasks.mockResolvedValue([task({ status: "review" })]);
 

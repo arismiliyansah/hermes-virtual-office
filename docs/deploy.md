@@ -25,7 +25,7 @@ Dua hostname berbeda sering tertukar:
 
 ## 0. Prasyarat
 
-- Node.js ≥ 22 dan pnpm di mesin deploy
+- Node.js ≥ 22.12.0 dan pnpm di mesin deploy
 - `wrangler` sudah login: `pnpm exec wrangler login`
 - Akun Cloudflare dengan Workers, D1, dan Durable Objects
 - Hermes Agent terpasang di mesin pemilik, gateway-nya mendengarkan di loopback
@@ -57,9 +57,12 @@ Perintah ini mencetak `database_id`. Tambahkan ke `wrangler.jsonc`:
 
 ## 2. Terapkan semua migrasi
 
-Terapkan **keduanya**, berurutan: `migrations/0001_init.sql` lalu
-`migrations/0002_task_statuses.sql`. Wrangler melacak migrasi yang sudah jalan, jadi
-cukup jalankan perintah `migrations apply` (jangan `d1 execute` satu per satu).
+Terapkan **semuanya**, berurutan: `migrations/0001_init.sql`,
+`migrations/0002_task_statuses.sql`, lalu `migrations/0003_seed_statuses.sql`.
+Migrasi terakhir mengisi status kanonik `todo/doing/review/done` supaya papan baru
+tanpa kartu `done` tetap bisa memindahkan kartu ke Done. Wrangler melacak migrasi
+yang sudah jalan, jadi cukup jalankan perintah `migrations apply` (jangan
+`d1 execute` satu per satu).
 
 ```bash
 # Database produksi
@@ -175,7 +178,7 @@ Di macOS, konfigurasi biasanya di `~/.cloudflared/config.yml`.
 Connector tidak punya dependensi npm; cukup Node ≥ 22 dan satu file.
 
 ```bash
-sudo useradd --system --home /opt/hermes-virtual-office \
+sudo useradd --system --user-group --home /opt/hermes-virtual-office \
   --shell /usr/sbin/nologin hvo
 sudo mkdir -p /opt/hermes-virtual-office
 sudo cp -R connector /opt/hermes-virtual-office/

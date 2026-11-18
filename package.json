@@ -8,11 +8,14 @@
     "node": ">=22.12.0"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "pnpm test:worker && pnpm test:app && pnpm test:connector",
     "typecheck": "tsc --noEmit && tsc --noEmit -p app/tsconfig.json",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "build:app": "vite build app"
+    "build:app": "vite build app",
+    "test:worker": "vitest run",
+    "test:app": "vitest run --config app/vitest.config.ts",
+    "test:connector": "node --test connector/auth-proxy.test.mjs"
   },
   "dependencies": {
     "hono": "^4.13.19",

@@ -118,6 +118,26 @@ export function KanbanPanel() {
     }
   }
 
+  async function move(task: Task, status: ColumnKey): Promise<void> {
+    if (pendingId() !== null || columnFor(task) === status) return;
+
+    setPendingId(task.id);
+    setError("");
+    try {
+      await api.updateTaskStatus(task.id, status);
+      await load();
+    } catch (cause) {
+      setError(
+        failureText(
+          cause,
+          `Gagal memindahkan "${titleFor(task)}". Coba lagi.`,
+        ),
+      );
+    } finally {
+      setPendingId(null);
+    }
+  }
+
   async function create(event: SubmitEvent): Promise<void> {
     event.preventDefault();
     if (creating()) return;
@@ -301,8 +321,27 @@ export function KanbanPanel() {
                         </div>
                       </Show>
 
-                      <Show when={canApprove(task)}>
-                        <div class="mt-2">
+                      <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                        <select
+                          class="min-h-11 rounded-[9px] border border-line bg-[var(--input-bg)] px-2 text-[12px] text-ink outline-none focus:border-accent disabled:opacity-60"
+                          aria-label={`Status untuk ${titleFor(task)}`}
+                          value={columnFor(task)}
+                          disabled={pendingId() !== null}
+                          onChange={(event) =>
+                            void move(
+                              task,
+                              event.currentTarget.value as ColumnKey,
+                            )
+                          }
+                        >
+                          <For each={COLUMNS}>
+                            {(column) => (
+                              <option value={column.key}>{column.label}</option>
+                            )}
+                          </For>
+                        </select>
+
+                        <Show when={canApprove(task)}>
                           <button
                             class="min-h-11 rounded-[9px] bg-accent px-3 text-[12px] font-semibold text-white hover:opacity-90 disabled:opacity-60"
                             type="button"
@@ -311,8 +350,8 @@ export function KanbanPanel() {
                           >
                             {pendingId() === task.id ? "Menyetujui…" : "Setujui"}
                           </button>
-                        </div>
-                      </Show>
+                        </Show>
+                      </div>
                     </article>
                   );
                 }}

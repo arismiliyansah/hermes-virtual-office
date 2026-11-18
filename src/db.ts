@@ -278,6 +278,23 @@ export async function addMinutes(db: D1Database, minute: MinuteInput): Promise<v
     .run();
 }
 
+export async function listMeetings(
+  db: D1Database,
+  limit = 50,
+): Promise<MeetingRow[]> {
+  const { results } = await db
+    .prepare(
+      `SELECT id, title, room, status, created_at
+       FROM meetings
+       ORDER BY created_at DESC, id
+       LIMIT ?`,
+    )
+    .bind(limit)
+    .all<MeetingRow>();
+
+  return results;
+}
+
 export async function getMeetingWithMinutes(
   db: D1Database,
   id: string,

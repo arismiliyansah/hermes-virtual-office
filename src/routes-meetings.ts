@@ -10,6 +10,7 @@ import {
   createMeeting,
   getMeetingWithMinutes,
   listAgents,
+  listMeetings,
   writeAudit,
   type AgentRow,
 } from "./db";
@@ -178,6 +179,10 @@ export function createMeetingRoutes(deps: MeetingRouteDeps): Hono<MeetingEnv> {
       }
       throw error;
     }
+  });
+
+  router.get("/meetings", async (c) => {
+    return c.json({ meetings: await listMeetings(deps.db) });
   });
 
   router.get("/meetings/:id", async (c) => {

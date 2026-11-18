@@ -35,6 +35,7 @@ export function MeetingPanel(
   const [ending, setEnding] = createSignal(false);
   const [error, setError] = createSignal("");
   const [result, setResult] = createSignal<MeetingResult | null>(null);
+  const [copyStatus, setCopyStatus] = createSignal("");
 
   const selectedAgents = createMemo(() =>
     agents().filter((agent) => selected().includes(agent.id)),
@@ -97,6 +98,25 @@ export function MeetingPanel(
     } finally {
       markMeetingParticipants(null);
       setStarting(false);
+    }
+  }
+
+  async function copyMinutes(meeting: MeetingResult): Promise<void> {
+    const text = meeting.minutes
+      .map((minute) => minute.content?.trim() ?? "")
+      .filter((content) => content.length > 0)
+      .join("\n\n");
+
+    if (text.length === 0) {
+      setCopyStatus("Belum ada notulen untuk disalin.");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopyStatus("Notulen tersalin.");
+    } catch {
+      setCopyStatus("Gagal menyalin notulen.");
     }
   }
 
@@ -277,14 +297,34 @@ export function MeetingPanel(
                 </p>
               )}
             </For>
-            <button
-              class="min-h-11 rounded-[9px] border border-line bg-panel px-3 text-[12.5px] font-semibold text-ink hover:border-accent disabled:opacity-60"
-              type="button"
-              disabled={ending()}
-              onClick={() => void endMeeting()}
-            >
-              {ending() ? "Memuat notulen…" : "Akhiri meeting"}
-            </button>
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="min-h-11 rounded-[9px] border border-line bg-panel px-3 text-[12.5px] font-semibold text-ink hover:border-accent disabled:opacity-60"
+                type="button"
+                onClick={() => void copyMinutes(meeting())}
+              >
+                Salin notulen
+              </button>
+              <button
+                class="min-h-11 rounded-[9px] border border-line bg-panel px-3 text-[12.5px] font-semibold text-ink hover:border-accent disabled:opacity-60"
+                type="button"
+                disabled={ending()}
+                onClick={() => void endMeeting()}
+              >
+                {ending() ? "Memuat notulen…" : "Akhiri meeting"}
+              </button>
+            </div>
+            <Show when={copyStatus()}>
+              {(status) => (
+                <p
+                  class="text-[11.5px] text-ink-soft"
+                  role="status"
+                  aria-live="polite"
+                >
+                  {status()}
+                </p>
+              )}
+            </Show>
           </section>
         )}
       </Show>

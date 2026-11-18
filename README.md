@@ -18,7 +18,7 @@ Worker ditandatangani HMAC sebelum diteruskan ke gateway Hermes.
 ```
 Browser ──HTTPS + cookie sesi──► Cloudflare Worker (Hono, SPA SolidJS)
                                       │
-                                      ├─ D1: users, agents, tasks, meetings, minutes, audit
+                                      ├─ D1: users, agents, tasks, task_statuses, meetings, minutes, audit
                                       └─ Durable Object OfficeHub: WebSocket hub
                                       │
                                       │ request bertanda tangan HMAC
@@ -41,7 +41,7 @@ bukan Cloudflare Access. Detail batas kepercayaan dan format tanda tangan ada di
 
 ## Prasyarat
 
-- Node.js **≥ 22** (lihat `engines` di `package.json`)
+- Node.js **≥ 22.12.0** (lihat `engines` di `package.json`)
 - pnpm (versi mengikuti field `packageManager`)
 - Akun Cloudflare dengan akses Workers, D1, dan Durable Objects
 - Domain yang dikelola Cloudflare bila ingin memakai hostname tunnel sendiri
@@ -70,11 +70,23 @@ dev `dev-secret` / `dev-hmac-secret`; **jangan pernah memakai nilai itu di produ
 Perintah lain:
 
 ```bash
-pnpm vitest run --config app/vitest.config.ts   # test SPA (happy-dom)
-node --test connector/auth-proxy.test.mjs       # test connector (Node murni)
+pnpm test              # worker + SPA + connector, berurutan
+pnpm test:worker       # Vitest Workers pool (D1 + Durable Object)
+pnpm test:app          # Vitest SPA (happy-dom)
+pnpm test:connector    # node --test connector/auth-proxy.test.mjs
 node scripts/smoke.mjs --check-config           # cek env deployment wajib
 pnpm typecheck
 ```
+
+Tabel D1 yang dibuat migrasi: `users`, `agents`, `tasks`, `task_statuses`,
+`meetings`, `minutes`, `audit`. Migrasi dijalankan berurutan dari
+`migrations/0001_init.sql` sampai `0003_seed_statuses.sql`; yang terakhir mengisi
+status kanonik `todo/doing/review/done`.
+
+`wrangler.jsonc` sengaja menyimpan var dev (`dev-secret`, `dev-hmac-secret`) agar
+`wrangler dev` dan test harness jalan. Worker menolak var itu di host non-localhost:
+rute `/api/*` (kecuali `/api/health`) menjawab **503 fail-closed** sampai
+`SESSION_SECRET` diganti lewat `wrangler secret put`.
 
 ## Struktur repo
 
@@ -83,7 +95,7 @@ app/          SPA SolidJS: canvas isometrik, dock, chat, kanban, meeting, cron
 connector/    auth-proxy Node tanpa dependensi (verifikasi HMAC)
 deploy/       contoh konfigurasi cloudflared dan unit systemd
 docs/         panduan deploy, catatan API Hermes, spec, dan plan
-migrations/   skema D1 (0001_init.sql, 0002_task_statuses.sql)
+migrations/   skema D1 (0001_init.sql, 0002_task_statuses.sql, 0003_seed_statuses.sql)
 mockups/      mockup HTML sebagai acuan visual
 scripts/      hash-password, seed, dan smoke check
 src/          Worker Hono: auth, routes, Hermes client, Durable Object OfficeHub

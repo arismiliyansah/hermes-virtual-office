@@ -298,6 +298,14 @@ export async function startMeeting(input: NewMeeting): Promise<MeetingResult> {
   return (await response.json()) as MeetingResult;
 }
 
+export async function listMeetings(): Promise<Meeting[]> {
+  const response = await request("/api/meetings");
+  if (!response.ok) await throwApiError(response);
+
+  const body = (await response.json()) as { meetings?: Meeting[] };
+  return Array.isArray(body.meetings) ? body.meetings : [];
+}
+
 export async function getMeeting(id: string): Promise<MeetingResult | null> {
   const response = await request(`/api/meetings/${encodeURIComponent(id)}`);
   if (response.status === 404) return null;

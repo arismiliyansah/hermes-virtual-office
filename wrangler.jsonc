@@ -28,6 +28,10 @@
       "new_sqlite_classes": ["OfficeHub"]
     }
   ],
+  // Dev-only values kept so `wrangler dev` and the test harness run without
+  // extra setup. The Worker fails closed (503) on non-localhost hosts while
+  // SESSION_SECRET is empty or "dev-secret"; production must override these
+  // with `wrangler secret put`.
   "vars": {
     "HERMES_ORIGIN": "https://hermes.example-tunnel.dev",
     "HERMES_HMAC_SECRET": "dev-hmac-secret",

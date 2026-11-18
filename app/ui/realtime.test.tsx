@@ -322,6 +322,29 @@ describe("MeetingPanel", () => {
     });
   });
 
+  it("copies the minutes to the clipboard", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    render(() => <MeetingPanel />);
+
+    await screen.findByRole("button", { name: "Pilih Damar" });
+    fireEvent.click(screen.getByRole("button", { name: "Pilih Damar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pilih Sari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mulai meeting" }));
+
+    await screen.findByText("Notulen: rilis ditunda besok.");
+    fireEvent.click(screen.getByRole("button", { name: "Salin notulen" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("Notulen: rilis ditunda besok.");
+    });
+    expect(await screen.findByText("Notulen tersalin.")).toBeTruthy();
+  });
+
   it("keeps the running meeting participants when selection changes", async () => {
     let resolveMeeting!: (value: MeetingResult) => void;
     mocks.startMeeting.mockReturnValue(

@@ -9,6 +9,7 @@ import {
   type StartedSession,
 } from "../src/auth";
 import {
+  createMeeting as insertMeeting,
   getMeetingWithMinutes,
   upsertAgent,
   type AuditRow,
@@ -302,6 +303,54 @@ describe("GET /api/meetings/:id", () => {
 
     expect(res.status).toBe(404);
     expect(await res.json()).toEqual({ error: "not_found" });
+  });
+});
+
+describe("GET /api/meetings", () => {
+  it("returns a compact newest-first list without minutes", async () => {
+    await insertMeeting(db, {
+      id: "meeting-old",
+      title: "Rapat lama",
+      room: "Ruang Kaca",
+      status: "done",
+      created_at: "2026-11-01 09:00:00",
+    });
+    await insertMeeting(db, {
+      id: "meeting-new",
+      title: "Rapat baru",
+      room: "Ruang Kaca",
+      status: "running",
+      created_at: "2026-11-18 09:00:00",
+    });
+
+    const { hermes } = stubHermes();
+    const res = await appFor(hermes).request(
+      "/api/meetings",
+      { headers: authHeaders() },
+      bindings,
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { meetings: MeetingRow[] };
+    expect(body.meetings.map((meeting) => meeting.id)).toEqual([
+      "meeting-new",
+      "meeting-old",
+    ]);
+    expect(body.meetings[0]).toEqual({
+      id: "meeting-new",
+      title: "Rapat baru",
+      room: "Ruang Kaca",
+      status: "running",
+      created_at: "2026-11-18 09:00:00",
+    });
+    expect("minutes" in body.meetings[0]).toBe(false);
+  });
+
+  it("requires a session", async () => {
+    const { hermes } = stubHermes();
+    const res = await appFor(hermes).request("/api/meetings", {}, bindings);
+
+    expect(res.status).toBe(401);
   });
 });
 
