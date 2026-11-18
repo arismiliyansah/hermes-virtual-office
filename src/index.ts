@@ -12,6 +12,7 @@ import { getUserByEmail } from "./db";
 import type { Env } from "./env";
 import { HermesClient } from "./hermes";
 import { createAgentRoutes } from "./routes-agents";
+import { createCronRoutes } from "./routes-cron";
 import { createTaskRoutes } from "./routes-tasks";
 
 export { OfficeHub } from "./hub";
@@ -105,5 +106,21 @@ async function mountTaskRoutes(c: AppContext): Promise<Response> {
 
 app.use("/api/tasks", mountTaskRoutes);
 app.use("/api/tasks/:id/status", mountTaskRoutes);
+
+async function mountCronRoutes(c: AppContext): Promise<Response> {
+  const routes = createCronRoutes({
+    hermes: new HermesClient({
+      origin: c.env.HERMES_ORIGIN,
+      secret: c.env.HERMES_HMAC_SECRET,
+    }),
+    db: c.env.DB,
+  });
+
+  return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
+}
+
+app.use("/api/cron", mountCronRoutes);
+app.use("/api/cron/:id/toggle", mountCronRoutes);
+app.use("/api/cron/:id/run", mountCronRoutes);
 
 export default app;
