@@ -227,21 +227,21 @@ node scripts/hash-password.mjs 'password-yang-kuat'
 # 2. Salin output pbkdf2$... ke password_hash di scripts/seed.sql
 #    (dan ubah email bila perlu)
 
-# 3. Terapkan
-./scripts/seed.sh
+# 3. Terapkan ke database produksi
+./scripts/seed.sh --remote
 ```
 
-`scripts/seed.sh` menjalankan:
-
-```bash
-pnpm exec wrangler d1 execute hermes-office --local --file=scripts/seed.sql
-```
-
-Untuk database produksi, jalankan varian remote (tersedia sebagai komentar di
-skrip):
+Mode `--remote` meneruskan ke database D1 produksi:
 
 ```bash
 pnpm exec wrangler d1 execute hermes-office --remote --file=scripts/seed.sql
+```
+
+Untuk pengembangan lokal, jalankan tanpa opsi (default lokal):
+
+```bash
+./scripts/seed.sh
+# sama dengan: pnpm exec wrangler d1 execute hermes-office --local --file=scripts/seed.sql
 ```
 
 `users.id` bersifat tetap, jadi seed ulang setelah baris pertama ada akan gagal
@@ -294,11 +294,16 @@ Lakukan setelah deploy pertama, idealnya dari jaringan seluler:
 - [ ] **Login dari HP.** Buka hostname aplikasi di browser ponsel, login dengan akun
       hasil seed. Halaman kantor tampil, dock bisa dibuka, dan sesi bertahan setelah
       refresh (cookie `__Host-` hanya dikirim lewat HTTPS).
-- [ ] **Banner terputus saat tunnel dimatikan.** Matikan `cloudflared`
-      (`sudo systemctl stop cloudflared`), tunggu WebSocket putus. Topbar berubah
-      menjadi **terputus**; aksi ke Hermes gagal dengan pesan koneksi. Nyalakan
-      kembali tunnel dan tunggu reconnect otomatis (backoff maksimum 15 detik) sampai
-      kembali **terhubung**.
+- [ ] **Kegagalan aksi Hermes saat tunnel dimatikan.** Status Topbar berasal dari
+      WebSocket browser→Worker (`/api/ws` ke OfficeHub), bukan dari tunnel Hermes.
+      Karena itu mematikan `cloudflared` **tidak** mengubah Topbar: selama Worker
+      hidup, Topbar tetap **terhubung**. Untuk menguji jalur Hermes, matikan tunnel
+      (`sudo systemctl stop cloudflared`), lalu kirim chat, mulai meeting, atau
+      jalankan cron. Panel harus menampilkan pesan kegagalan; API Worker membalas
+      `502 hermes_unavailable` dan aplikasi tidak crash. Nyalakan kembali tunnel,
+      ulangi aksi yang sama, dan pastikan berhasil. Reconnect WebSocket otomatis
+      (backoff maksimum 15 detik) hanya berlaku bila koneksi browser–Worker yang
+      putus, bukan tunnel.
 - [ ] **Tema malam.** Tekan **Malam** di Topbar. Palet scene berubah, pilihan bertahan
       setelah refresh, dan teks tetap terbaca.
 - [ ] **Meeting dengan ≥ 2 agent.** Buka tab Meeting, pilih minimal dua agent, isi
