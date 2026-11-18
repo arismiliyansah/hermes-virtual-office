@@ -483,6 +483,9 @@ describe("poll-driven office state", () => {
     expect(screen.getByTestId("hermes-status").textContent).toContain(
       "Mesin terputus",
     );
+    // WS and Hermes are separate indicators: the socket is still down while
+    // the REST poll failure is the one that says the machine is unreachable.
+    expect(screen.getByLabelText("Realtime terputus")).toBeTruthy();
 
     // First failure doubles the 15s interval to 30s.
     await vi.advanceTimersByTimeAsync(30_000);
@@ -492,6 +495,7 @@ describe("poll-driven office state", () => {
     expect(screen.getByTestId("hermes-status").textContent).toContain(
       "Mesin terhubung",
     );
+    expect(screen.getByLabelText("Realtime terputus")).toBeTruthy();
   });
 
   it("does not select an agent when a drag ends away from its start", async () => {

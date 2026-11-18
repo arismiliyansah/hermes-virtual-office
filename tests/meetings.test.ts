@@ -411,6 +411,19 @@ describe("production mount (default Worker app)", () => {
     HERMES_HMAC_SECRET: "mount-secret",
   } as unknown as Env;
 
+  it("serves GET /api/meetings through the production mount", async () => {
+    const { token } = await startSession("mount-user", PRODUCTION_SECRET);
+
+    const res = await worker.request(
+      "https://office.test/api/meetings",
+      { headers: { cookie: `${SESSION_COOKIE}=${token}` } },
+      productionBindings,
+    );
+
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ meetings: [] });
+  });
+
   it("(g) serves POST and GET /api/meetings through the Worker with auth and CSRF", async () => {
     await withStubbedFetch(
       async (input, init) => {

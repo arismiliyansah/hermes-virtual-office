@@ -158,8 +158,6 @@ function Office(props: {
     const tapped = isTap(clientX, clientY);
     press = null;
     if (!tapped) return;
-    const agentId = scene()?.hitTest?.(clientX, clientY) ?? null;
-    if (agentId === null) return;
     lastPointerTapAt = Date.now();
     pickAt(clientX, clientY);
   }
@@ -297,7 +295,7 @@ function OfficeShell(props: { onLogout: () => Promise<void> }) {
   // without any user action.
   const sceneAgents = createMemo<SceneSnapshot["agents"]>(() => {
     const base = poll.agents();
-    if (base.length > 0) {
+    if (poll.lastSuccessAt() !== null) {
       const activity = officeActivity();
       return base.map((agent) => ({
         id: agent.id,
