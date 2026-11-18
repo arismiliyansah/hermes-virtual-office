@@ -2,34 +2,57 @@
 # Seed the owner account into D1.
 #
 # The checked-in scripts/seed.sql creates the local development user
-# (hermes@hermes.local / hermes-dev). For a real deployment, replace its
-# password_hash before running the remote mode.
+# (hermes@hermes.local / hermes-dev). Remote seeding refuses that default
+# password hash unless --allow-dev-password is passed explicitly.
 #
 # Usage:
-#   ./scripts/seed.sh            # local D1 (development)
-#   ./scripts/seed.sh --remote   # production D1
+#   ./scripts/seed.sh                              # local D1 (development)
+#   ./scripts/seed.sh --remote                     # production D1
+#   ./scripts/seed.sh --remote --allow-dev-password
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-MODE="--local"
-if [[ "$#" -gt 1 ]]; then
-  echo "usage: ./scripts/seed.sh [--local|--remote]" >&2
-  exit 2
-fi
+# Keep in sync with scripts/seed.sql and scripts/hash-password.mjs hermes-dev.
+DEFAULT_PASSWORD_HASH='pbkdf2$100000$Z8KAEVrAJZH-F3_Ohb8m0A$Ny41DkuDd8tZUJwoKwYfqZIFDPzi9JiPhD7yj8664uU'
 
-if [[ "$#" -eq 1 ]]; then
+usage() {
+  echo "usage: ./scripts/seed.sh [--local|--remote] [--allow-dev-password]" >&2
+}
+
+MODE="--local"
+ALLOW_DEV_PASSWORD=0
+
+while [[ "$#" -gt 0 ]]; do
   case "$1" in
     --local|--remote) MODE="$1" ;;
+    --allow-dev-password) ALLOW_DEV_PASSWORD=1 ;;
     --help|-h)
-      echo "usage: ./scripts/seed.sh [--local|--remote]"
+      echo "usage: ./scripts/seed.sh [--local|--remote] [--allow-dev-password]"
       exit 0
       ;;
     *)
-      echo "usage: ./scripts/seed.sh [--local|--remote]" >&2
+      usage
       exit 2
       ;;
   esac
+  shift
+done
+
+if [[ "$MODE" == "--remote" && "$ALLOW_DEV_PASSWORD" -ne 1 ]]; then
+  if grep -qF "$DEFAULT_PASSWORD_HASH" scripts/seed.sql; then
+    cat >&2 <<'EOF'
+Refusing to seed production with the default development password hash.
+
+Replace password_hash in scripts/seed.sql with:
+  node scripts/hash-password.mjs 'your-password'
+
+Then re-run ./scripts/seed.sh --remote.
+Pass --allow-dev-password only if you really intend to expose
+hermes@hermes.local / hermes-dev to the internet.
+EOF
+    exit 1
+  fi
 fi
 
 if [[ "$MODE" == "--remote" ]]; then

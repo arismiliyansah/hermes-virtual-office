@@ -95,6 +95,7 @@ Alasan (1): pemilik sudah familier dengan Cloudflare; tunnel adalah cara standar
 - Proyeksi **isometrik di Canvas 2D** (tile wajik rasio 2:1), sprite pixel-art, kamera pan/zoom, urutan gambar berdasarkan depth.
 - Scene (lantai, meja, karakter) di canvas; **panel UI** (chat, kanban, profil, cron, meeting) di DOM SolidJS — lebih mudah diakses dan dibuat responsif untuk HP.
 - Opsi cadangan bila jumlah sprite/animasi membebani: pindah ke PixiJS (WebGL) tanpa mengubah arsitektur state. Keputusan akhir saat implementasi, default Canvas 2D.
+- **Kontrol tampilan**: pan (drag satu jari/mouse), zoom (wheel, cubit dua jari, tombol −/+, clamp 0.6–2.5×), dan **rotate 4 arah kelipatan 90°** (tombol). Rotasi dilakukan di level koordinat grid — bukan memutar canvas — agar sprite/avatar tetap tegak. Preferensi tampilan terakhir (zoom/rotasi/posisi) disimpan per-browser.
 - Aset sprite: pack CC0 atau hasil generate; disimpan sebagai static assets.
 - **Tema siang/malam**: dua palet scene (siang hangat terang; malam gelap hangat dengan layar monitor dan lampu meja sebagai sumber cahaya — bukan hitam pekat). Default mengikuti preferensi OS (`prefers-color-scheme`), bisa di-toggle manual dari top bar; pilihan tersimpan di profil ringan per-browser.
 

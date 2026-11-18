@@ -63,7 +63,7 @@ function hermesFailure(error: unknown): Response | null {
 
 export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
   const router = new Hono<TaskEnv>();
-  const limiter = rateLimit(TASK_RATE_LIMIT);
+  const limiter = rateLimit({ ...TASK_RATE_LIMIT, scope: "tasks" });
 
   router.use(
     "*",

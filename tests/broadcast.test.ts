@@ -29,6 +29,9 @@ import { applyAllMigrations } from "./migrations";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
+// The deploy guard rejects "dev-secret" outside localhost; production mounts
+// exercise a realistic secret.
+const PRODUCTION_SECRET = "production-session-secret";
 
 type TestEnv = {
   Bindings: { SESSION_SECRET: string };
@@ -358,7 +361,7 @@ describe("producer broadcasts", () => {
 describe("production mount wiring", () => {
   const productionBindings = {
     DB: db,
-    SESSION_SECRET: SECRET,
+    SESSION_SECRET: PRODUCTION_SECRET,
     HERMES_ORIGIN: "https://hermes.mount.test",
     HERMES_HMAC_SECRET: "mount-secret",
   } as unknown as Env;
@@ -376,12 +379,14 @@ describe("production mount wiring", () => {
       get: () => stub,
     };
 
+    const mountSession = await startSession("mount-user", PRODUCTION_SECRET);
+
     await withStubbedFetch(
       async () => Response.json([agent(1, { status: "desk" })]),
       async () => {
         const res = await worker.request(
           "https://office.test/api/agents",
-          { headers: { cookie: `${SESSION_COOKIE}=${session.token}` } },
+          { headers: { cookie: `${SESSION_COOKIE}=${mountSession.token}` } },
           { ...productionBindings, OFFICE_HUB: hub } as unknown as Env,
         );
         expect(res.status).toBe(200);
@@ -402,12 +407,14 @@ describe("production mount wiring", () => {
       }),
     };
 
+    const mountSession = await startSession("mount-user", PRODUCTION_SECRET);
+
     await withStubbedFetch(
       async () => Response.json([agent(1)]),
       async () => {
         const res = await worker.request(
           "https://office.test/api/agents",
-          { headers: { cookie: `${SESSION_COOKIE}=${session.token}` } },
+          { headers: { cookie: `${SESSION_COOKIE}=${mountSession.token}` } },
           { ...productionBindings, OFFICE_HUB: hub } as unknown as Env,
         );
         expect(res.status).toBe(200);

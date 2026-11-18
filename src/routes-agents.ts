@@ -81,7 +81,7 @@ function hermesFailure(error: unknown): Response | null {
 
 export function createAgentRoutes(deps: AgentRouteDeps): Hono<AgentEnv> {
   const router = new Hono<AgentEnv>();
-  const limiter = rateLimit(AGENT_RATE_LIMIT);
+  const limiter = rateLimit({ ...AGENT_RATE_LIMIT, scope: "agents" });
 
   router.use(
     "*",

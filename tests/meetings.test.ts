@@ -29,6 +29,9 @@ import { applyAllMigrations } from "./migrations";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
+// The deploy guard rejects "dev-secret" outside localhost; production mounts
+// exercise a realistic secret.
+const PRODUCTION_SECRET = "production-session-secret";
 const USER_ID = "owner-1";
 
 type TestEnv = {
@@ -354,7 +357,7 @@ describe("auth, CSRF and rate limiting", () => {
 describe("production mount (default Worker app)", () => {
   const productionBindings = {
     DB: db,
-    SESSION_SECRET: SECRET,
+    SESSION_SECRET: PRODUCTION_SECRET,
     HERMES_ORIGIN: "https://hermes.mount.test",
     HERMES_HMAC_SECRET: "mount-secret",
   } as unknown as Env;
@@ -375,7 +378,7 @@ describe("production mount (default Worker app)", () => {
         });
       },
       async () => {
-        const { token, csrf } = await startSession("mount-user", SECRET);
+        const { token, csrf } = await startSession("mount-user", PRODUCTION_SECRET);
 
         const unauthenticated = await worker.request(
           "https://office.test/api/meetings/meeting-1",

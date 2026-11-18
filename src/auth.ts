@@ -151,6 +151,26 @@ export async function verifyPassword(
   }
 }
 
+/**
+ * A real PBKDF2 hash for a password nobody uses. Unknown emails verify
+ * against it so a login attempt costs the same as a wrong password; skipping
+ * the derivation would leak account existence through response time.
+ */
+const DUMMY_PASSWORD_HASH =
+  "pbkdf2$100000$ZlzbILMIqyPRiddAHW4WGg$f_ajVGRLukWEHgbO3kzy0rV4baWpL0doiOBepllV0zw";
+
+export async function verifyPasswordOrDummy(
+  password: string,
+  stored: string | null | undefined,
+): Promise<boolean> {
+  if (stored === null || stored === undefined || stored.length === 0) {
+    await verifyPassword(password, DUMMY_PASSWORD_HASH);
+    return false;
+  }
+
+  return verifyPassword(password, stored);
+}
+
 // --- Sessions -------------------------------------------------------------
 
 interface SessionPayload {
@@ -226,6 +246,38 @@ export async function readSession(
 }
 
 // --- Middleware -----------------------------------------------------------
+
+const DEV_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "[::1]"]);
+
+/**
+ * Deployments must replace the checked-in dev secret. The guard fails closed
+ * on every API route except health, while localhost stays usable with the
+ * wrangler dev vars.
+ */
+export function sessionSecretReady(secret: string | undefined): boolean {
+  const value = (secret ?? "").trim();
+  return value.length > 0 && value !== "dev-secret";
+}
+
+export function isDevHostname(hostname: string): boolean {
+  return DEV_HOSTNAMES.has(hostname.toLowerCase());
+}
+
+export function secureSessionGuard(): MiddlewareHandler {
+  const middleware = async (
+    c: Context<{ Bindings: AuthBindings }>,
+    next: Next,
+  ) => {
+    if (sessionSecretReady(c.env.SESSION_SECRET)) return next();
+
+    const hostname = new URL(c.req.url).hostname;
+    if (isDevHostname(hostname)) return next();
+
+    return c.json({ error: "insecure_session_secret" }, 503);
+  };
+
+  return middleware as MiddlewareHandler;
+}
 
 export function requireAuth(secret: string): MiddlewareHandler {
   const middleware = async (

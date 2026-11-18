@@ -73,7 +73,7 @@ async function markFailed(db: D1Database, id: string): Promise<void> {
 
 export function createMeetingRoutes(deps: MeetingRouteDeps): Hono<MeetingEnv> {
   const router = new Hono<MeetingEnv>();
-  const limiter = rateLimit(MEETING_RATE_LIMIT);
+  const limiter = rateLimit({ ...MEETING_RATE_LIMIT, scope: "meetings" });
 
   router.use(
     "*",

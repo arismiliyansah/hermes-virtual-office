@@ -528,21 +528,27 @@ git commit -m "feat: solid spa shell with login and responsive dock"
 ### Task 14: Proyeksi isometrik, palet tema, layout, renderer
 
 **Files:**
-- Create: `app/scene/iso.ts`, `app/scene/palette.ts`, `app/scene/layout.ts`, `app/scene/renderer.ts`, `app/scene/scene.test.ts`, `app/theme.ts`, `app/theme.test.ts`
+- Create: `app/scene/iso.ts`, `app/scene/palette.ts`, `app/scene/layout.ts`, `app/scene/viewport.ts`, `app/scene/renderer.ts`, `app/scene/scene.test.ts`, `app/scene/viewport.test.ts`, `app/ui/SceneToolbar.tsx`, `app/ui/scene-toolbar.test.tsx`, `app/theme.ts`, `app/theme.test.ts`
 
 **Interfaces:**
 - Consumes: tipe `Duty` dari `src/protocol.ts` (import tipe saja).
-- Produces: `project(i, j, o?): {x, y}`; `diamond(c, w?, h?): Point[]`; `DAY: Palette`, `NIGHT: Palette` (nilai persis dari mockup); `LAYOUT` (6 meja, ruang meeting, lounge, rack, `MEET_PATH`); `createScene(canvas, {palette, layout}): {draw(snapshot: {agents: {id: string; duty: Duty}[]}): void}` — renderer hanya menerima data, TIDAK mengimpor `app/api.ts`/adapter; `resolveInitialTheme(prefersDark, stored): "day"|"night"`; `themeStorageKey = "hermes-office-theme"`.
+- Produces: `project(i, j, o?): {x, y}`; `diamond(c, w?, h?): Point[]`; `DAY: Palette`, `NIGHT: Palette` (nilai persis dari mockup); `LAYOUT` (6 meja, ruang meeting, lounge, rack, `MEET_PATH`);
+  - `interface Viewport { zoom: number; rotation: 0|1|2|3; panX: number; panY: number }`; `defaultViewport: Viewport`; `clampZoom(z: number): number` (0.6–2.5); `nextRotation(r): 0|1|2|3` (wrap); `rotatePoint(i, j, rotation, cx, cy): {i: number; j: number}` (rotasi 90° CKeliling pusat grid `(cx,cy)`; 4× = identity; sprite tetap tegak karena rotasi di level koordinat); `viewStorageKey = "hermes-office-view"`.
+  - `createScene(canvas, {palette, layout}): {draw(snapshot: {agents: {id: string; duty: Duty}[]}, viewport: Viewport): void}` — renderer hanya menerima data, TIDAK mengimpor `app/api.ts`/adapter.
+  - `SceneToolbar` props `{viewport: Viewport; onChange(v: Viewport): void}` — tombol zoom − / +, rotate, reset; tiap tombol ≥ 44px; interaksi canvas: wheel zoom, drag pan, pinch dua jari, keyboard `+`/`-`/`R`.
+  - `resolveInitialTheme(prefersDark, stored): "day"|"night"`; `themeStorageKey = "hermes-office-theme"`.
 
 - [ ] **Step 1: Failing tests**
 
-(a) `project(1,0) - project(0,0)` = `(+tw/2, +th/2)`; (b) `diamond` 4 titik urut atas-kanan-bawah-kiri; (c) `resolveInitialTheme` mendahulukan stored lalu prefers; (d) `createScene` dengan canvas stub + snapshot 6 agent tidak melempar error, dan modul scene tidak mengimpor `../api` (assert pada teks modul).
+(a) `project(1,0) - project(0,0)` = `(+tw/2, +th/2)`; (b) `diamond` 4 titik urut atas-kanan-bawah-kiri; (c) `resolveInitialTheme` mendahulukan stored lalu prefers; (d) `createScene` dengan canvas stub + snapshot 6 agent tidak melempar error, dan modul scene tidak mengimpor `../api` (assert pada teks modul); (e) `clampZoom(0.1)=0.6`, `clampZoom(9)=2.5`; (f) `nextRotation` 0→1→2→3→0; (g) `rotatePoint(i,j,0,…)` = identity, 90° memutar tepat searah jarum jam di sekitar pusat grid, dan 4× rotasi = identity (toleransi 1e-9); (h) `SceneToolbar` menekan zoom − / + mengirim `onChange` dengan zoom ter-clamp dan tombol rotate mengirim rotasi berikutnya.
 
 - [ ] **Step 2: Jalankan — FAIL**
 
 Run: `pnpm vitest run --config app/vitest.config.ts`
 
 - [ ] **Step 3: Implementasi (palet disalin dari mockup)**
+
+Renderer menggambar ulang memakai `rotatePoint` untuk semua koordinat sebelum `project` dan mengurutkan depth berdasarkan koordinat terotasi; zoom/pan diterapkan sebagai transform canvas (`setTransform`) dengan pusat viewport; `SceneToolbar` memakai kontrol ≥ 44px, dan state viewport dipersist ke `localStorage[viewStorageKey]`.
 
 - [ ] **Step 4: PASS**
 
@@ -565,7 +571,7 @@ git commit -m "feat: isometric scene, day/night palettes, theme resolution"
 
 **Interfaces:**
 - Consumes: `GET /api/agents`, `POST /api/agents/:id/messages` (Task 9); `GET /api/tasks`, `POST /api/tasks`, `POST /api/tasks/:id/status` (Task 10); `createScene` (Task 14).
-- Produces: panel chat (pilih agent dari kantor/roster → header + pesan + composer; kirim → tampilkan balasan + indikator mengetik sementara) dan panel kanban 4 kolom (`/api/tasks`; kartu `office_label` berlabel amber; "Setujui" → `POST /status` lalu refresh; tombol "Tugas baru" → `POST /api/tasks`). Snapshot WS dari `useOffice()` (Task 16) menggambar scene.
+- Produces: panel chat (pilih agent dari kantor/roster → header + pesan + composer; kirim → tampilkan balasan + indikator mengetik sementara) dan panel kanban 4 kolom (`/api/tasks`; kartu `office_label` berlabel amber; "Setujui" → `POST /status` lalu refresh; tombol "Tugas baru" → `POST /api/tasks`). Snapshot WS dari `useOffice()` (Task 16) menggambar scene; `SceneToolbar` (Task 14) dipasang di App dengan state `Viewport` (zoom/rotate/pan) yang diteruskan ke `draw`.
 
 - [ ] **Step 1: Failing tests**
 
@@ -624,7 +630,7 @@ git add app/ui && git commit -m "feat: realtime client with backoff, meeting and
 ### Task 17: Deployment docs + konfigurasi connector + smoke check
 
 **Files:**
-- Create: `docs/deploy.md`, `deploy/cloudflared.example.yml`, `deploy/hermes-auth-proxy.service`, `scripts/seed.sh`, `scripts/smoke.mjs`, `tests/deploy.test.ts`
+- Create: `README.md`, `docs/deploy.md`, `deploy/cloudflared.example.yml`, `deploy/hermes-auth-proxy.service`, `scripts/seed.sh`, `scripts/smoke.mjs`, `tests/deploy.test.ts`
 
 **Interfaces:**
 - Consumes: semua task sebelumnya.
@@ -639,6 +645,8 @@ Env kosong → exit 1 dan menyebut `HERMES_ORIGIN`; env lengkap → exit 0.
 Run: `pnpm vitest run tests/deploy.test.ts`
 
 - [ ] **Step 3: Implementasi docs + config + smoke**
+
+`README.md` (untuk repo publik): ringkasan proyek, tangkapan/rujukan mockup, arsitektur ringkas (Cloudflare app + Hermes di mesin sendiri via tunnel HMAC), prasyarat, quickstart dev, struktur repo, dan tautan ke `docs/deploy.md`, `docs/superpowers/specs/`, `docs/superpowers/plans/`. Tanpa klaim palsu: sebut status "v0.1".
 
 `docs/deploy.md`: urutan `wrangler d1 create hermes-office` → apply migrations → `wrangler secret put SESSION_SECRET`/`HERMES_HMAC_SECRET` → set `HERMES_ORIGIN` → `pnpm build:app` → `wrangler deploy` → di mesin: auth-proxy + cloudflared ingress `hermes-office.example.com → http://127.0.0.1:8787`. Sertakan catatan NTP (skew HMAC), seed user (`scripts/seed.sh`), dan checklist smoke manual: login dari HP, banner terputus saat tunnel mati, tema malam, meeting ≥2 agent, setujui kartu.
 

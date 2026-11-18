@@ -4,3 +4,5 @@ dist/
 .wrangler/
 .superpowers/
 app/dist/
+.dev.vars*
+.env*

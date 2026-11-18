@@ -4,14 +4,16 @@ import {
   csrfProtection,
   expiredSessionCookie,
   requireAuth,
+  secureSessionGuard,
   sessionCookie,
   startSession,
-  verifyPassword,
+  verifyPasswordOrDummy,
 } from "./auth";
 import { getUserByEmail } from "./db";
 import type { Env } from "./env";
 import { HermesClient } from "./hermes";
 import type { ServerMsg } from "./protocol";
+import { clientIp, rateLimit } from "./ratelimit";
 import { createAgentRoutes } from "./routes-agents";
 import { createCronRoutes } from "./routes-cron";
 import { createMeetingRoutes } from "./routes-meetings";
@@ -23,11 +25,20 @@ const app = new Hono<{ Bindings: Env; Variables: AuthVariables }>();
 
 type AppContext = Context<{ Bindings: Env; Variables: AuthVariables }>;
 
-app.use("/api/*", csrfProtection());
+export const LOGIN_RATE_LIMIT = { limit: 10, windowMs: 60_000 } as const;
+
+const loginLimiter = rateLimit({
+  ...LOGIN_RATE_LIMIT,
+  scope: "auth",
+  subject: clientIp,
+});
 
 app.get("/api/health", (c) => c.json({ ok: true }));
 
-app.post("/api/auth/login", async (c) => {
+app.use("/api/*", secureSessionGuard());
+app.use("/api/*", csrfProtection());
+
+app.post("/api/auth/login", loginLimiter, async (c) => {
   const body = await c.req
     .json<{ email?: unknown; password?: unknown }>()
     .catch(() => null);
@@ -41,7 +52,13 @@ app.post("/api/auth/login", async (c) => {
   }
 
   const user = await getUserByEmail(c.env.DB, body.email.trim());
-  if (user === null || !(await verifyPassword(body.password, user.password_hash))) {
+  // Unknown emails still pay the PBKDF2 cost; account existence must not be
+  // observable through response timing.
+  const passwordOk = await verifyPasswordOrDummy(
+    body.password,
+    user?.password_hash,
+  );
+  if (user === null || !passwordOk) {
     return c.json({ error: "invalid_credentials" }, 401);
   }
 

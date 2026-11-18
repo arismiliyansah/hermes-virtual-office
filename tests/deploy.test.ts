@@ -2,6 +2,7 @@
 // scripts/smoke.mjs runs as a plain Node process: workerd has no child_process,
 // so this file belongs to the "node" project in vitest.config.ts.
 import { spawnSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -65,5 +66,14 @@ describe("scripts/smoke.mjs --check-config", () => {
 
     expect(result.status).toBe(1);
     expect(result.output).toContain("HERMES_ORIGIN");
+  });
+});
+
+describe(".gitignore", () => {
+  it("ignores local secret files", () => {
+    const ignore = readFileSync(path.join(ROOT, ".gitignore"), "utf8");
+
+    expect(ignore).toMatch(/^\.dev\.vars\*$/m);
+    expect(ignore).toMatch(/^\.env\*$/m);
   });
 });

@@ -37,7 +37,7 @@ function hermesFailure(error: unknown): Response | null {
 
 export function createCronRoutes(deps: CronRouteDeps): Hono<CronEnv> {
   const router = new Hono<CronEnv>();
-  const limiter = rateLimit(CRON_RATE_LIMIT);
+  const limiter = rateLimit({ ...CRON_RATE_LIMIT, scope: "cron" });
 
   router.use(
     "*",

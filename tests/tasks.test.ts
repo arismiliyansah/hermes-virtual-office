@@ -30,6 +30,9 @@ import { applyAllMigrations } from "./migrations";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
+// The deploy guard rejects "dev-secret" outside localhost; production mounts
+// exercise a realistic secret.
+const PRODUCTION_SECRET = "production-session-secret";
 const USER_ID = "owner-1";
 
 type TestEnv = {
@@ -541,6 +544,42 @@ describe("auth, CSRF and rate limiting", () => {
     expect(await limited.json()).toEqual({ error: "rate_limited" });
   });
 
+  it("scopes fixed windows to the route family as well as limit and window", async () => {
+    const app = new Hono<TestEnv>();
+    app.get(
+      "/api/agents-family",
+      (c, next) => requireAuth(SECRET)(c, next),
+      rateLimit({ limit: 1, windowMs: 60_000, scope: "agents" }),
+      (c) => c.json({ ok: "agents" }),
+    );
+    app.get(
+      "/api/tasks-family",
+      (c, next) => requireAuth(SECRET)(c, next),
+      rateLimit({ limit: 1, windowMs: 60_000, scope: "tasks" }),
+      (c) => c.json({ ok: "tasks" }),
+    );
+
+    const first = await app.request(
+      "/api/agents-family",
+      { headers: authHeaders() },
+      bindings,
+    );
+    const second = await app.request(
+      "/api/agents-family",
+      { headers: authHeaders() },
+      bindings,
+    );
+    const otherFamily = await app.request(
+      "/api/tasks-family",
+      { headers: authHeaders() },
+      bindings,
+    );
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(429);
+    expect(otherFamily.status).toBe(200);
+  });
+
   it("scopes fixed windows to the limit and window configuration", async () => {
     const app = new Hono<TestEnv>();
     app.get(
@@ -565,7 +604,7 @@ describe("auth, CSRF and rate limiting", () => {
 describe("production mount (default Worker app)", () => {
   const productionBindings = {
     DB: db,
-    SESSION_SECRET: SECRET,
+    SESSION_SECRET: PRODUCTION_SECRET,
     HERMES_ORIGIN: "https://hermes.mount.test",
     HERMES_HMAC_SECRET: "mount-secret",
   } as unknown as Env;
@@ -588,7 +627,7 @@ describe("production mount (default Worker app)", () => {
         return Response.json({ error: "unexpected" }, { status: 500 });
       },
       async () => {
-        const { token, csrf } = await startSession("mount-user", SECRET);
+        const { token, csrf } = await startSession("mount-user", PRODUCTION_SECRET);
 
         const listed = await worker.request(
           "https://office.test/api/tasks",

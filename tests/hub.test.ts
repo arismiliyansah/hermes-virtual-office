@@ -48,7 +48,7 @@ function expectSnapshot(msg: ServerMsg) {
 
 async function connect(): Promise<{ ws: WebSocket; snapshot: Promise<string> }> {
   const token = await createSession("owner-1", bindings.SESSION_SECRET);
-  const res = await SELF.fetch("https://office.test/api/ws", {
+  const res = await SELF.fetch("http://localhost/api/ws", {
     headers: {
       Upgrade: "websocket",
       Cookie: `${SESSION_COOKIE}=${token}`,

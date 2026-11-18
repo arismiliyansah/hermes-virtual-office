@@ -4,6 +4,16 @@ import type { AuthVariables } from "./auth";
 export interface RateLimitOptions {
   limit: number;
   windowMs: number;
+  /**
+   * Route-family namespace. Two routes with the same limit configuration must
+   * still own separate budgets, otherwise hitting chat would consume tasks.
+   */
+  scope?: string;
+  /**
+   * Budget subject. Defaults to the authenticated user id. Routes reachable
+   * before login (auth) pass their own subject, usually the client IP.
+   */
+  subject?: (c: Context<{ Variables: AuthVariables }>) => string | null;
 }
 
 interface FixedWindow {
@@ -16,20 +26,29 @@ interface FixedWindow {
 // global across the Worker fleet.
 const windows = new Map<string, FixedWindow>();
 
+/** Cloudflare's trusted client IP header, with a stable fallback for tests. */
+export function clientIp(
+  c: Context<{ Variables: AuthVariables }>,
+): string {
+  const header = c.req.header("cf-connecting-ip")?.trim();
+  return header !== undefined && header.length > 0 ? header : "unknown";
+}
+
 export function rateLimit({
   limit,
   windowMs,
+  scope = "default",
+  subject,
 }: RateLimitOptions): MiddlewareHandler {
   return (async (
     c: Context<{ Variables: AuthVariables }>,
     next: Next,
   ) => {
-    const userId = c.get("userId");
-    if (typeof userId !== "string" || userId.length === 0) return next();
+    const keySubject =
+      subject === undefined ? (c.get("userId") ?? null) : subject(c);
+    if (typeof keySubject !== "string" || keySubject.length === 0) return next();
 
-    // Different limit configurations are independent budgets; sharing one key
-    // would let the chat limiter consume the tasks limiter's window.
-    const key = `${limit}:${windowMs}:${userId}`;
+    const key = `${scope}:${limit}:${windowMs}:${keySubject}`;
     const now = Date.now();
     let window = windows.get(key);
     if (window === undefined || now >= window.resetAt) {

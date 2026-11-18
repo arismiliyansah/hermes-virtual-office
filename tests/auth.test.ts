@@ -1,5 +1,5 @@
 import { env, SELF } from "cloudflare:test";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyAllMigrations } from "./migrations";
 import {
   SESSION_COOKIE,
@@ -7,8 +7,12 @@ import {
   hashPassword,
   readSession,
   verifyPassword,
+  verifyPasswordOrDummy,
 } from "../src/auth";
 import { insertUser } from "../src/db";
+import type { Env } from "../src/env";
+import worker from "../src/index";
+import { __resetRateLimit } from "../src/ratelimit";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
@@ -80,6 +84,10 @@ beforeAll(async () => {
     email: OWNER_EMAIL,
     passwordHash: await hashPassword(OWNER_PASSWORD),
   });
+});
+
+beforeEach(() => {
+  __resetRateLimit();
 });
 
 describe("password hashing", () => {
@@ -344,6 +352,93 @@ describe("CSRF on mutations", () => {
   });
 
   it("does not require CSRF for login itself", async () => {
+    const res = await login();
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("unknown email timing", () => {
+  it("still derives PBKDF2 for an unknown email", async () => {
+    const spy = vi.spyOn(crypto.subtle, "deriveBits");
+
+    await expect(verifyPasswordOrDummy("whatever", null)).resolves.toBe(false);
+    await expect(verifyPasswordOrDummy("whatever", undefined)).resolves.toBe(false);
+
+    expect(spy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    spy.mockRestore();
+  });
+});
+
+describe("login rate limit", () => {
+  it("allows 10 attempts per IP per minute and rejects the 11th", async () => {
+    // Invalid bodies are cheapest but still consume the login budget.
+    for (let attempt = 0; attempt < 10; attempt += 1) {
+      const res = await SELF.fetch("http://localhost/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(res.status).toBe(400);
+    }
+
+    const limited = await login();
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({ error: "rate_limited" });
+
+    const otherIp = await SELF.fetch("http://localhost/api/auth/login", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "cf-connecting-ip": "203.0.113.10",
+      },
+      body: JSON.stringify({}),
+    });
+    expect(otherIp.status).toBe(400);
+  });
+});
+
+describe("deploy session-secret guard", () => {
+  const insecure = (secret: string) =>
+    ({
+      DB: db,
+      SESSION_SECRET: secret,
+      HERMES_ORIGIN: "https://hermes.example",
+      HERMES_HMAC_SECRET: "hmac",
+    }) as unknown as Env;
+
+  it("fails closed with 503 on auth routes outside localhost", async () => {
+    for (const secret of ["dev-secret", "", "   "]) {
+      const res = await worker.request(
+        "https://office.example/api/auth/login",
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            email: OWNER_EMAIL,
+            password: OWNER_PASSWORD,
+          }),
+        },
+        insecure(secret),
+      );
+
+      expect(res.status, `secret=${JSON.stringify(secret)}`).toBe(503);
+      expect(await res.json()).toEqual({ error: "insecure_session_secret" });
+    }
+  });
+
+  it("guards protected API routes too", async () => {
+    const res = await worker.request(
+      "https://office.example/api/auth/me",
+      {},
+      insecure("dev-secret"),
+    );
+
+    expect(res.status).toBe(503);
+    expect(await res.json()).toEqual({ error: "insecure_session_secret" });
+  });
+
+  it("keeps localhost usable with the wrangler dev secret", async () => {
     const res = await login();
 
     expect(res.status).toBe(200);
