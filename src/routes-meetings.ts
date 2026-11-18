@@ -4,6 +4,7 @@ import {
   type AuthBindings,
   type AuthVariables,
 } from "./auth";
+import { notify, type Broadcast } from "./broadcast";
 import {
   addMinutes,
   createMeeting,
@@ -32,6 +33,7 @@ export interface HermesMeetingApi {
 export interface MeetingRouteDeps {
   hermes: HermesMeetingApi;
   db: D1Database;
+  broadcast?: Broadcast;
 }
 
 type MeetingEnv = { Bindings: AuthBindings; Variables: AuthVariables };
@@ -124,6 +126,10 @@ export function createMeetingRoutes(deps: MeetingRouteDeps): Hono<MeetingEnv> {
           turnPrompt(title, index + 1, participants.length),
         );
         transcript.push(`[${agentName(agents, agentId)}]: ${reply}`);
+        await notify(deps.broadcast, {
+          type: "meeting_turn",
+          payload: { agentId, text: reply },
+        });
       }
 
       const rawTranscript = transcript.join("\n");
@@ -153,6 +159,10 @@ export function createMeetingRoutes(deps: MeetingRouteDeps): Hono<MeetingEnv> {
           participants,
           secretary,
         }),
+      });
+      await notify(deps.broadcast, {
+        type: "event",
+        payload: { text: `Rapat selesai: ${title}`, ts: Date.now() },
       });
 
       const stored = await getMeetingWithMinutes(deps.db, meetingId);

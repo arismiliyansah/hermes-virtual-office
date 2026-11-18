@@ -4,7 +4,14 @@ import {
   type AuthBindings,
   type AuthVariables,
 } from "./auth";
-import { listAgents, setAgentDesk, upsertAgent, type AgentRow } from "./db";
+import { notify, type Broadcast } from "./broadcast";
+import {
+  listAgents,
+  listTasks,
+  setAgentDesk,
+  upsertAgent,
+  type AgentRow,
+} from "./db";
 import type { Duty } from "./duty";
 import { HermesError, type AgentSummary } from "./hermes";
 import { rateLimit } from "./ratelimit";
@@ -27,6 +34,7 @@ export interface HermesAgentApi {
 export interface AgentRouteDeps {
   hermes: HermesAgentApi;
   db: D1Database;
+  broadcast?: Broadcast;
 }
 
 export interface AgentView {
@@ -153,6 +161,14 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono<AgentEnv> {
         desk: row?.desk_index ?? null,
         status: normalizeDuty(agent.status),
       };
+    });
+
+    await notify(deps.broadcast, {
+      type: "snapshot",
+      payload: {
+        agents: agents.map((agent) => ({ id: agent.id, duty: agent.status })),
+        tasks: await listTasks(deps.db),
+      },
     });
 
     return c.json({ agents });

@@ -11,6 +11,7 @@ import {
 import { getUserByEmail } from "./db";
 import type { Env } from "./env";
 import { HermesClient } from "./hermes";
+import type { ServerMsg } from "./protocol";
 import { createAgentRoutes } from "./routes-agents";
 import { createCronRoutes } from "./routes-cron";
 import { createMeetingRoutes } from "./routes-meetings";
@@ -78,6 +79,30 @@ function withoutApiPrefix(request: Request): Request {
   return new Request(url, request);
 }
 
+/**
+ * Routes stay usable in tests and local runs without a hub binding. Delivery
+ * failures are swallowed: HTTP state changes must not fail on realtime noise.
+ */
+function hubBroadcast(
+  env: Env,
+): ((message: ServerMsg) => Promise<void>) | undefined {
+  const hub = (env as Partial<Env>).OFFICE_HUB;
+  if (hub === undefined || hub === null) return undefined;
+
+  return async (message) => {
+    try {
+      const stub = hub.get(hub.idFromName("main"));
+      await stub.fetch("https://hub/broadcast", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(message),
+      });
+    } catch {
+      // Best effort: the request already committed its database writes.
+    }
+  };
+}
+
 async function mountAgentRoutes(c: AppContext): Promise<Response> {
   const routes = createAgentRoutes({
     hermes: new HermesClient({
@@ -85,6 +110,7 @@ async function mountAgentRoutes(c: AppContext): Promise<Response> {
       secret: c.env.HERMES_HMAC_SECRET,
     }),
     db: c.env.DB,
+    broadcast: hubBroadcast(c.env),
   });
 
   return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
@@ -100,6 +126,7 @@ async function mountTaskRoutes(c: AppContext): Promise<Response> {
       secret: c.env.HERMES_HMAC_SECRET,
     }),
     db: c.env.DB,
+    broadcast: hubBroadcast(c.env),
   });
 
   return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
@@ -115,6 +142,7 @@ async function mountCronRoutes(c: AppContext): Promise<Response> {
       secret: c.env.HERMES_HMAC_SECRET,
     }),
     db: c.env.DB,
+    broadcast: hubBroadcast(c.env),
   });
 
   return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
@@ -131,6 +159,7 @@ async function mountMeetingRoutes(c: AppContext): Promise<Response> {
       secret: c.env.HERMES_HMAC_SECRET,
     }),
     db: c.env.DB,
+    broadcast: hubBroadcast(c.env),
   });
 
   return routes.fetch(withoutApiPrefix(c.req.raw), c.env);

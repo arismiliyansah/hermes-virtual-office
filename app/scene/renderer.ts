@@ -22,6 +22,8 @@ export interface SceneSnapshot {
 
 export interface Scene {
   draw(snapshot: SceneSnapshot, viewport: Viewport): void;
+  /** Canvas-relative CSS point to the agent drawn there, if any. */
+  hitTest?(x: number, y: number): string | null;
 }
 
 type DrawItem = { depth: number; paint: () => void };
@@ -168,11 +170,29 @@ function canvasSize(canvas: HTMLCanvasElement): {
   return { width, height, dpr };
 }
 
+interface FrameAgent {
+  id: string;
+  x: number;
+  y: number;
+}
+
+interface Frame {
+  width: number;
+  height: number;
+  scale: number;
+  sceneX: number;
+  sceneY: number;
+  panX: number;
+  panY: number;
+  agents: FrameAgent[];
+}
+
 export function createScene(
   canvas: HTMLCanvasElement,
   options: { palette: Palette; layout: typeof LAYOUT },
 ): Scene {
   const { palette, layout } = options;
+  let frame: Frame | null = null;
 
   return {
     draw(snapshot: SceneSnapshot, viewport: Viewport): void {
@@ -680,6 +700,19 @@ export function createScene(
       const sortedAgents = [...placement.agents].sort(
         (a, b) => depthOf(a.i, a.j) - depthOf(b.i, b.j),
       );
+      frame = {
+        width,
+        height,
+        scale,
+        sceneX,
+        sceneY,
+        panX: viewport.panX,
+        panY: viewport.panY,
+        agents: sortedAgents.map((entry) => {
+          const point = pt(entry.i, entry.j);
+          return { id: entry.id, x: point.x, y: point.y };
+        }),
+      };
       const speaker = sortedAgents.find((entry) => entry.duty === "meeting");
       for (const entry of sortedAgents) {
         agent(pt(entry.i, entry.j), entry, entry === speaker);
@@ -706,6 +739,32 @@ export function createScene(
       );
 
       ctx.restore();
+    },
+
+    hitTest(x: number, y: number): string | null {
+      if (frame === null || !Number.isFinite(x) || !Number.isFinite(y)) {
+        return null;
+      }
+      // Undo the CSS-space pan/scale so the point lives in projected scene
+      // coordinates, matching where each agent sprite was painted.
+      const scenePointX =
+        (x - frame.width / 2 - frame.panX) / frame.scale + frame.sceneX;
+      const scenePointY =
+        (y - frame.height / 2 - frame.panY) / frame.scale + frame.sceneY;
+
+      for (let index = frame.agents.length - 1; index >= 0; index -= 1) {
+        const candidate = frame.agents[index];
+        if (
+          scenePointX >= candidate.x - 26 &&
+          scenePointX <= candidate.x + 26 &&
+          scenePointY >= candidate.y - 34 &&
+          scenePointY <= candidate.y + 22
+        ) {
+          return candidate.id;
+        }
+      }
+
+      return null;
     },
   };
 }

@@ -34,6 +34,39 @@ export interface NewTask {
   ownerAgentId?: string | null;
 }
 
+export interface Meeting {
+  id: string;
+  title: string | null;
+  room: string | null;
+  status: string | null;
+  created_at: string | null;
+}
+
+export interface Minute {
+  id: string;
+  meeting_id: string | null;
+  content: string | null;
+  created_at: string | null;
+}
+
+export interface MeetingResult {
+  meeting: Meeting;
+  minutes: Minute[];
+}
+
+export interface NewMeeting {
+  title: string;
+  participantIds: string[];
+}
+
+export interface CronJob {
+  id: string;
+  name: string;
+  schedule: string;
+  enabled: boolean;
+  agentId: string;
+}
+
 export interface LoginResponse {
   csrf: string;
 }
@@ -222,4 +255,54 @@ export async function updateTaskStatus(
 
   const result = (await response.json()) as { task: Task };
   return result.task;
+}
+
+export async function startMeeting(input: NewMeeting): Promise<MeetingResult> {
+  const response = await request("/api/meetings", {
+    method: "POST",
+    body: { title: input.title, participantIds: input.participantIds },
+  });
+  if (!response.ok) await throwApiError(response);
+
+  return (await response.json()) as MeetingResult;
+}
+
+export async function getMeeting(id: string): Promise<MeetingResult | null> {
+  const response = await request(`/api/meetings/${encodeURIComponent(id)}`);
+  if (response.status === 404) return null;
+  if (!response.ok) await throwApiError(response);
+
+  return (await response.json()) as MeetingResult;
+}
+
+export async function listCrons(): Promise<CronJob[]> {
+  const response = await request("/api/cron");
+  if (!response.ok) await throwApiError(response);
+
+  const body = (await response.json()) as { crons?: CronJob[] };
+  return Array.isArray(body.crons) ? body.crons : [];
+}
+
+export async function setCronEnabled(
+  id: string,
+  enabled: boolean,
+): Promise<CronJob> {
+  const response = await request(
+    `/api/cron/${encodeURIComponent(id)}/toggle`,
+    { method: "POST", body: { enabled } },
+  );
+  if (!response.ok) await throwApiError(response);
+
+  const body = (await response.json()) as { cron: CronJob };
+  return body.cron;
+}
+
+export async function runCron(id: string): Promise<{ runId: string }> {
+  const response = await request(
+    `/api/cron/${encodeURIComponent(id)}/run`,
+    { method: "POST" },
+  );
+  if (!response.ok) await throwApiError(response);
+
+  return (await response.json()) as { runId: string };
 }

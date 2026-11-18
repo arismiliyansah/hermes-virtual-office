@@ -4,6 +4,7 @@ import {
   type AuthBindings,
   type AuthVariables,
 } from "./auth";
+import { notify, type Broadcast } from "./broadcast";
 import { writeAudit } from "./db";
 import { HermesError, type CronJob } from "./hermes";
 import { rateLimit } from "./ratelimit";
@@ -23,6 +24,7 @@ export interface HermesCronApi {
 export interface CronRouteDeps {
   hermes: HermesCronApi;
   db: D1Database;
+  broadcast?: Broadcast;
 }
 
 type CronEnv = { Bindings: AuthBindings; Variables: AuthVariables };
@@ -78,6 +80,13 @@ export function createCronRoutes(deps: CronRouteDeps): Hono<CronEnv> {
       action: "cron.toggle",
       detail: JSON.stringify({ cronId: id, enabled: body.enabled }),
     });
+    await notify(deps.broadcast, {
+      type: "event",
+      payload: {
+        text: `Cron "${cron.name}" ${cron.enabled ? "diaktifkan" : "dinonaktifkan"}`,
+        ts: Date.now(),
+      },
+    });
 
     return c.json({ cron });
   });
@@ -98,6 +107,13 @@ export function createCronRoutes(deps: CronRouteDeps): Hono<CronEnv> {
       userId: c.get("userId"),
       action: "cron.run",
       detail: JSON.stringify({ cronId: id, runId: result.runId }),
+    });
+    await notify(deps.broadcast, {
+      type: "event",
+      payload: {
+        text: `Cron "${id}" dijalankan (${result.runId})`,
+        ts: Date.now(),
+      },
     });
 
     return c.json({ runId: result.runId });

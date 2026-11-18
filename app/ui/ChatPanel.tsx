@@ -1,4 +1,12 @@
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import {
+  For,
+  Show,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onMount,
+} from "solid-js";
 import * as api from "../api";
 import type { Agent } from "../api";
 
@@ -36,7 +44,12 @@ function failureText(cause: unknown, fallback: string): string {
   return fallback;
 }
 
-export function ChatPanel() {
+export function ChatPanel(
+  props: {
+    selectedAgentId?: string | null;
+    onSelectAgent?: (agentId: string) => void;
+  } = {},
+) {
   const [agents, setAgents] = createSignal<Agent[]>([]);
   const [selectedId, setSelectedId] = createSignal<string | null>(null);
   const [conversations, setConversations] = createSignal<
@@ -64,6 +77,7 @@ export function ChatPanel() {
   function choose(agent: Agent): void {
     setSelectedId(agent.id);
     setError("");
+    props.onSelectAgent?.(agent.id);
   }
 
   function pushMessage(agentId: string, from: ChatMessage["from"], text: string): void {
@@ -104,12 +118,30 @@ export function ChatPanel() {
     }
   }
 
+  createEffect(
+    on(
+      () => props.selectedAgentId ?? null,
+      (id) => {
+        if (id !== null && agents().some((agent) => agent.id === id)) {
+          setSelectedId(id);
+        }
+      },
+      { defer: true },
+    ),
+  );
+
   onMount(async () => {
     try {
       const list = await api.listAgents();
       const safe = Array.isArray(list) ? list : [];
       setAgents(safe);
-      if (safe.length > 0) setSelectedId(safe[0].id);
+      const wanted = props.selectedAgentId ?? null;
+      const preferred =
+        wanted === null
+          ? null
+          : (safe.find((agent) => agent.id === wanted) ?? null);
+      if (preferred !== null) setSelectedId(preferred.id);
+      else if (safe.length > 0) setSelectedId(safe[0].id);
     } catch (cause) {
       setError(
         failureText(cause, "Tidak bisa memuat daftar agent. Coba lagi nanti."),

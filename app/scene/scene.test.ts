@@ -235,6 +235,29 @@ describe("scene renderer", () => {
     ).not.toThrow();
   });
 
+  it("hit-tests the agent painted at a canvas point", () => {
+    const { canvas } = stubCanvas();
+    const scene = createScene(canvas, { palette: DAY, layout: LAYOUT });
+    scene.draw(
+      { agents: [{ id: "atlas", duty: "desk" }] },
+      { zoom: 1, rotation: 0, panX: 0, panY: 0 },
+    );
+
+    let hit: string | null = null;
+    for (let y = 0; y < 540 && hit === null; y += 2) {
+      for (let x = 0; x < 960; x += 2) {
+        const found = scene.hitTest?.(x, y) ?? null;
+        if (found !== null) {
+          hit = found;
+          break;
+        }
+      }
+    }
+
+    expect(hit).toBe("atlas");
+    expect(scene.hitTest?.(1, 1)).toBeNull();
+  });
+
   it("keeps every scene module free of network/API imports", () => {
     for (const file of [
       "iso.ts",

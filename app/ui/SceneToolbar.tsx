@@ -3,7 +3,6 @@ import {
   clampZoom,
   defaultViewport,
   nextRotation,
-  saveViewport,
   type Viewport,
 } from "../scene/viewport";
 
@@ -24,7 +23,7 @@ export function SceneToolbar(props: {
   onChange: (viewport: Viewport) => void;
 }) {
   function apply(next: Viewport): void {
-    saveViewport(next);
+    // App owns viewport persistence so gestures and buttons share one writer.
     props.onChange(next);
   }
 

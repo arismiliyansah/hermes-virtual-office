@@ -4,6 +4,7 @@ import {
   type AuthBindings,
   type AuthVariables,
 } from "./auth";
+import { notify, type Broadcast } from "./broadcast";
 import {
   listKnownTaskStatuses,
   listTasks,
@@ -30,6 +31,7 @@ export interface HermesTaskApi {
 export interface TaskRouteDeps {
   hermes: HermesTaskApi;
   db: D1Database;
+  broadcast?: Broadcast;
 }
 
 type TaskEnv = { Bindings: AuthBindings; Variables: AuthVariables };
@@ -135,6 +137,10 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
         owner: card.owner,
       }),
     });
+    await notify(deps.broadcast, {
+      type: "event",
+      payload: { text: `Task dibuat: ${card.title}`, ts: Date.now() },
+    });
 
     return c.json({ task: await readTask(deps.db, card.id) }, 201);
   });
@@ -184,6 +190,10 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
         action: "task.status",
         detail: JSON.stringify({ taskId: id, status }),
       });
+      await notify(deps.broadcast, {
+        type: "event",
+        payload: { text: `Status ${card.status}: ${card.title}`, ts: Date.now() },
+      });
 
       return c.json({ task: await readTask(deps.db, card.id) });
     }
@@ -206,6 +216,13 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
       userId: c.get("userId"),
       action: "task.label",
       detail: JSON.stringify({ taskId: id, label: status }),
+    });
+    await notify(deps.broadcast, {
+      type: "event",
+      payload: {
+        text: `Label "${status}" untuk ${local.title ?? id}`,
+        ts: Date.now(),
+      },
     });
 
     return c.json({ task: await readTask(deps.db, id) });

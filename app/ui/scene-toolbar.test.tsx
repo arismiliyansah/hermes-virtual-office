@@ -85,12 +85,12 @@ describe("SceneToolbar", () => {
     expect(viewport().rotation).toBe(1);
   });
 
-  it("persists the latest viewport in localStorage", () => {
+  it("leaves viewport persistence to the single App owner", () => {
     const onChange = setup(view({ zoom: 1.4, rotation: 1 }));
     fireEvent.click(screen.getByRole("button", { name: "Putar tampilan 90 derajat" }));
-    expect(onChange).toHaveBeenCalled();
-    expect(JSON.parse(localStorage.getItem(viewStorageKey) ?? "null")).toEqual(
+    expect(onChange).toHaveBeenCalledWith(
       expect.objectContaining({ zoom: 1.4, rotation: 2 }),
     );
+    expect(localStorage.getItem(viewStorageKey)).toBeNull();
   });
 });
