@@ -26,7 +26,10 @@ function unknownStatus(task: Task): string | null {
 }
 
 function canApprove(task: Task): boolean {
-  return columnFor(task) === "review" || Boolean(task.office_label);
+  return (
+    task.status === "review" ||
+    (Boolean(task.office_label) && task.status !== "done")
+  );
 }
 
 function titleFor(task: Task): string {

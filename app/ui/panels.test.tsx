@@ -182,7 +182,19 @@ describe("KanbanPanel", () => {
     expect(done?.textContent).toContain("Audit tunnel");
   });
 
-  it("offers Setujui for a labelled card outside the review column", async () => {
+  it("shows Setujui on a review card", async () => {
+    mocks.listTasks.mockResolvedValue([task({ status: "review" })]);
+
+    const view = render(() => <KanbanPanel />);
+
+    await screen.findByText("Audit tunnel");
+    const review = view.container.querySelector('[data-column="review"]');
+    expect(
+      within(review as HTMLElement).getByRole("button", { name: "Setujui" }),
+    ).toBeTruthy();
+  });
+
+  it("shows Setujui for a labelled card whose status is not done", async () => {
     mocks.listTasks.mockResolvedValue([
       task({ status: "doing", office_label: "perlu persetujuan" }),
     ]);
@@ -194,6 +206,21 @@ describe("KanbanPanel", () => {
     expect(
       within(doing as HTMLElement).getByRole("button", { name: "Setujui" }),
     ).toBeTruthy();
+  });
+
+  it("hides Setujui on a done card that still carries an office label", async () => {
+    mocks.listTasks.mockResolvedValue([
+      task({ status: "done", office_label: "arsip" }),
+    ]);
+
+    const view = render(() => <KanbanPanel />);
+
+    await screen.findByText("Audit tunnel");
+    const done = view.container.querySelector('[data-column="done"]');
+    expect(
+      within(done as HTMLElement).queryByRole("button", { name: "Setujui" }),
+    ).toBeNull();
+    expect(screen.getByTestId("office-label").textContent).toBe("arsip");
   });
 
   it("creates a task from the compact form with a title and owner", async () => {
