@@ -4,7 +4,7 @@ import {
   type AuthBindings,
   type AuthVariables,
 } from "./auth";
-import { listAgents, upsertAgent, type AgentRow } from "./db";
+import { listAgents, setAgentDesk, upsertAgent, type AgentRow } from "./db";
 import type { Duty } from "./duty";
 import { HermesError, type AgentSummary } from "./hermes";
 import { rateLimit } from "./ratelimit";
@@ -96,9 +96,26 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono<AgentEnv> {
       throw error;
     }
 
-    const byId = new Map(local.map((row) => [row.id, row]));
-    const occupied = new Set<number>();
+    const syncedIds = new Set(synced.map((agent) => agent.id));
+
+    // Hermes is the source of truth for which agents exist. Free desks held by
+    // local agents that disappeared, otherwise a new agent would skip a desk
+    // that is visibly empty. upsertAgent cannot do this: its COALESCE keeps
+    // the previous desk when the incoming value is null.
     for (const row of local) {
+      if (row.desk_index !== null && !syncedIds.has(row.id)) {
+        await setAgentDesk(deps.db, row.id, null);
+      }
+    }
+
+    // Occupancy only counts agents that Hermes still reports.
+    const byId = new Map(
+      local
+        .filter((row) => syncedIds.has(row.id))
+        .map((row) => [row.id, row]),
+    );
+    const occupied = new Set<number>();
+    for (const row of byId.values()) {
       if (row.desk_index !== null) occupied.add(row.desk_index);
     }
 
@@ -110,8 +127,11 @@ export function createAgentRoutes(deps: AgentRouteDeps): Hono<AgentEnv> {
         id: agent.id,
         name: agent.name,
         role: agent.role,
-        desk_index: desk,
       });
+
+      if (existing?.desk_index !== desk) {
+        await setAgentDesk(deps.db, agent.id, desk);
+      }
 
       byId.set(agent.id, {
         id: agent.id,

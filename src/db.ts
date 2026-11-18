@@ -131,6 +131,22 @@ export async function upsertAgent(db: D1Database, agent: AgentInput): Promise<vo
     .run();
 }
 
+/**
+ * Set or clear a desk explicitly. Unlike `upsertAgent`, a null desk is written
+ * as null instead of being coalesced away, which is required when an agent
+ * disappears from Hermes and its desk must be freed.
+ */
+export async function setAgentDesk(
+  db: D1Database,
+  id: string,
+  deskIndex: number | null,
+): Promise<void> {
+  await db
+    .prepare("UPDATE agents SET desk_index = ? WHERE id = ?")
+    .bind(deskIndex, id)
+    .run();
+}
+
 export async function listTasks(db: D1Database): Promise<TaskRow[]> {
   const { results } = await db
     .prepare(

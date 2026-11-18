@@ -1,4 +1,4 @@
-import { applyD1Migrations, env, SELF } from "cloudflare:test";
+import { applyD1Migrations, env } from "cloudflare:test";
 import { Hono } from "hono";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
@@ -11,7 +11,9 @@ import {
   type StartedSession,
 } from "../src/auth";
 import { listAgents, upsertAgent } from "../src/db";
+import type { Env } from "../src/env";
 import { HermesError, type AgentSummary } from "../src/hermes";
+import worker from "../src/index";
 import { __resetRateLimit } from "../src/ratelimit";
 import {
   createAgentRoutes,
@@ -132,6 +134,29 @@ async function postMessage(
   );
 }
 
+type FetchHandler = (...args: Parameters<typeof fetch>) => Promise<Response>;
+
+/** Stub outbound fetch for the production Worker (same isolate as the test). */
+async function withStubbedFetch<T>(
+  handler: FetchHandler,
+  run: () => Promise<T>,
+): Promise<T> {
+  const original = globalThis.fetch;
+  globalThis.fetch = handler as typeof fetch;
+  try {
+    return await run();
+  } finally {
+    globalThis.fetch = original;
+  }
+}
+
+const productionBindings = {
+  DB: db,
+  SESSION_SECRET: SECRET,
+  HERMES_ORIGIN: "https://hermes.mount.test",
+  HERMES_HMAC_SECRET: "mount-secret",
+} as unknown as Env;
+
 describe("GET /api/agents", () => {
   it("(a) syncs six Hermes agents into desks 0..5 and stores them in D1", async () => {
     const { body } = await syncAgents([1, 2, 3, 4, 5, 6].map((index) => agent(index)));
@@ -187,6 +212,42 @@ describe("GET /api/agents", () => {
       ["agent-2", 3, "#7c5cff"],
     ]);
     expect(body.agents[1]).toMatchObject({ name: "Agent 2", role: "reviewer" });
+  });
+
+  it("frees the desk of an agent removed from Hermes and gives it to a new agent", async () => {
+    const { hermes, state } = stubHermes([agent(1), agent(2), agent(3)]);
+    const app = appFor(hermes);
+
+    const first = await getAgents(app);
+    expect(first.status).toBe(200);
+    expect(((await first.json()) as { agents: AgentView[] }).agents.map((a) => a.desk)).toEqual([
+      0, 1, 2,
+    ]);
+
+    // The middle agent disappears from Hermes.
+    state.agents = [agent(1), agent(3)];
+    const second = await getAgents(app);
+    expect(second.status).toBe(200);
+    expect(((await second.json()) as { agents: AgentView[] }).agents.map((a) => a.desk)).toEqual([
+      0, 2,
+    ]);
+    expect(
+      (await listAgents(db)).find((row) => row.id === "agent-2")?.desk_index,
+    ).toBeNull();
+
+    // A new agent reuses the freed desk instead of hotdesking.
+    state.agents = [agent(1), agent(3), agent(4)];
+    const third = await getAgents(app);
+    expect(third.status).toBe(200);
+    const body = (await third.json()) as { agents: AgentView[] };
+    expect(body.agents.map((a) => [a.id, a.desk])).toEqual([
+      ["agent-1", 0],
+      ["agent-3", 2],
+      ["agent-4", 1],
+    ]);
+    expect(
+      (await listAgents(db)).find((row) => row.id === "agent-4")?.desk_index,
+    ).toBe(1);
   });
 
   it("normalizes unknown or missing Hermes statuses to idle", async () => {
@@ -277,13 +338,6 @@ describe("auth, CSRF and rate limiting", () => {
     expect(await res.json()).toEqual({ error: "unauthorized" });
   });
 
-  it("mounts the routes at /api/agents in the real Worker", async () => {
-    const res = await SELF.fetch("https://office.test/api/agents");
-
-    expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: "unauthorized" });
-  });
-
   it("(d) rejects a message mutation without x-csrf-token with 403", async () => {
     const { hermes } = stubHermes([agent(1)]);
     const res = await postMessage(appFor(hermes), "agent-1", { text: "hello" }, {
@@ -318,5 +372,83 @@ describe("auth, CSRF and rate limiting", () => {
       cookie: `${SESSION_COOKIE}=${other.token}`,
     });
     expect(otherUser.status).toBe(200);
+  });
+});
+
+describe("production mount (default Worker app)", () => {
+  it("rewrites /api/agents to the router's /agents handler", async () => {
+    const outbound: string[] = [];
+
+    await withStubbedFetch(
+      async (input, init) => {
+        outbound.push(`${init?.method ?? "GET"} ${new URL(String(input)).pathname}`);
+        return Response.json([agent(1), agent(2)]);
+      },
+      async () => {
+        const { token } = await startSession("mount-user", SECRET);
+        const res = await worker.request(
+          "https://office.test/api/agents",
+          { headers: { cookie: `${SESSION_COOKIE}=${token}` } },
+          productionBindings,
+        );
+
+        expect(res.status).toBe(200);
+        const body = (await res.json()) as { agents: AgentView[] };
+        expect(body.agents.map((item) => [item.id, item.desk])).toEqual([
+          ["agent-1", 0],
+          ["agent-2", 1],
+        ]);
+      },
+    );
+
+    expect(outbound).toEqual(["GET /agents"]);
+  });
+
+  it("rewrites the chat path and forwards the POST body intact", async () => {
+    const outbound: { method: string; path: string; body: string }[] = [];
+
+    await withStubbedFetch(
+      async (input, init) => {
+        outbound.push({
+          method: init?.method ?? "GET",
+          path: new URL(String(input)).pathname,
+          body: String(init?.body ?? ""),
+        });
+        return Response.json({
+          reply: "mount-reply",
+          sessionId: "mount-session",
+        });
+      },
+      async () => {
+        const { token, csrf } = await startSession("mount-user", SECRET);
+        const res = await worker.request(
+          "https://office.test/api/agents/agent-9/messages",
+          {
+            method: "POST",
+            headers: {
+              cookie: `${SESSION_COOKIE}=${token}`,
+              "x-csrf-token": csrf,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({ text: "hello mount" }),
+          },
+          productionBindings,
+        );
+
+        expect(res.status).toBe(200);
+        expect(await res.json()).toEqual({
+          reply: "mount-reply",
+          sessionId: "mount-session",
+        });
+      },
+    );
+
+    expect(outbound).toEqual([
+      {
+        method: "POST",
+        path: "/agents/agent-9/messages",
+        body: '{"text":"hello mount"}',
+      },
+    ]);
   });
 });
