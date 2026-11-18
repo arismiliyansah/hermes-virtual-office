@@ -1,5 +1,5 @@
 import { createSignal, onCleanup, type Accessor } from "solid-js";
-import type { Duty, ServerMsg } from "../../src/protocol";
+import type { AgentStatus, ServerMsg } from "../../src/protocol";
 
 export const MAX_EVENTS = 20;
 export const MAX_BACKOFF_MS = 15_000;
@@ -16,7 +16,7 @@ export interface MeetingTurn {
 
 export interface OfficeState {
   connected: Accessor<boolean>;
-  agents: Accessor<Record<string, Duty>>;
+  agents: Accessor<Record<string, AgentStatus>>;
   events: Accessor<OfficeEvent[]>;
   meetingTurn: Accessor<MeetingTurn | null>;
   clearMeetingTurn: () => void;
@@ -57,7 +57,7 @@ function parseFrame(raw: unknown): ServerMsg | null {
  */
 export function useOffice(options: UseOfficeOptions = {}): OfficeState {
   const [connected, setConnected] = createSignal(false);
-  const [agents, setAgents] = createSignal<Record<string, Duty>>({});
+  const [agents, setAgents] = createSignal<Record<string, AgentStatus>>({});
   const [events, setEvents] = createSignal<OfficeEvent[]>([]);
   const [meetingTurn, setMeetingTurn] = createSignal<MeetingTurn | null>(null);
 
@@ -72,7 +72,7 @@ export function useOffice(options: UseOfficeOptions = {}): OfficeState {
 
   function apply(message: ServerMsg): void {
     if (message.type === "snapshot") {
-      const next: Record<string, Duty> = {};
+      const next: Record<string, AgentStatus> = {};
       for (const agent of message.payload.agents) next[agent.id] = agent.duty;
       setAgents(next);
     } else if (message.type === "agent_state") {

@@ -1,4 +1,4 @@
-import type { Duty } from "../src/protocol";
+import type { AgentStatus } from "../src/duty";
 
 export const CSRF_STORAGE_KEY = "hermes-office-csrf";
 
@@ -12,7 +12,7 @@ export interface Agent {
   role: string;
   color: string | null;
   desk: number | null;
-  status: Duty;
+  status: AgentStatus;
 }
 
 export interface AgentReply {
@@ -88,6 +88,33 @@ export class ApiError extends Error {
 }
 
 let csrfToken: string | null = null;
+let unauthorizedHandler: (() => void) | null = null;
+
+/**
+ * App registers one handler so any 401 from an authenticated API call drops
+ * the office shell back to the login screen. Login/me/logout are exempt:
+ * their 401s are expected parts of the auth flow.
+ */
+export function setUnauthorizedHandler(
+  handler: (() => void) | null,
+): () => void {
+  unauthorizedHandler = handler;
+  return () => {
+    if (unauthorizedHandler === handler) unauthorizedHandler = null;
+  };
+}
+
+const AUTH_FLOW_PATHS = new Set([
+  "/api/auth/login",
+  "/api/auth/me",
+  "/api/auth/logout",
+]);
+
+function notifyUnauthorized(path: string): void {
+  if (AUTH_FLOW_PATHS.has(path)) return;
+  clearCsrfToken();
+  unauthorizedHandler?.();
+}
 
 function storage(): Storage | null {
   try {
@@ -148,12 +175,16 @@ async function request(
     if (token !== null) headers.set("x-csrf-token", token);
   }
 
-  return fetch(path, {
+  const response = await fetch(path, {
     method,
     credentials: "include",
     headers,
     body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
+
+  if (response.status === 401) notifyUnauthorized(path);
+
+  return response;
 }
 
 async function throwApiError(response: Response): Promise<never> {

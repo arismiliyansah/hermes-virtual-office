@@ -226,7 +226,7 @@ describe("GET /api/agents", () => {
     ).toBe(1);
   });
 
-  it("normalizes unknown or missing Hermes statuses to idle", async () => {
+  it("marks unknown or missing Hermes statuses as unknown instead of inventing idle", async () => {
     const { hermes } = stubHermes([
       agent(1, { status: "napping" as AgentSummary["status"] }),
       {
@@ -242,7 +242,11 @@ describe("GET /api/agents", () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { agents: AgentView[] };
-    expect(body.agents.map((item) => item.status)).toEqual(["idle", "idle", "meeting"]);
+    expect(body.agents.map((item) => item.status)).toEqual([
+      "unknown",
+      "unknown",
+      "meeting",
+    ]);
   });
 
   it("maps Hermes failures to 502 without writing agents", async () => {

@@ -4,7 +4,7 @@ import type { Duty } from "../../src/protocol";
 import { TH, TW, diamond, project } from "./iso";
 import { LAYOUT } from "./layout";
 import { DAY, NIGHT, type Palette } from "./palette";
-import { createScene } from "./renderer";
+import { createScene, placeAgents } from "./renderer";
 
 const PALETTE_KEYS: (keyof Palette)[] = [
   "tileA",
@@ -271,5 +271,85 @@ describe("scene renderer", () => {
       expect(source, file).not.toMatch(/\bfetch\s*\(/);
       expect(source, file).not.toMatch(/XMLHttpRequest|WebSocket/);
     }
+  });
+});
+
+describe("desk placement from GET /api/agents", () => {
+  const deskSeat = (index: number) => {
+    const [i, j] = LAYOUT.desks[index];
+    return [i, j - 0.65];
+  };
+
+  it("uses each desk slot, hotdesks the seventh agent and keeps shuffled order", () => {
+    const agents = [
+      { id: "seven", duty: "idle" as const, desk: null, name: "Seven", color: "#111111" },
+      { id: "two", duty: "desk" as const, desk: 1, name: "Dua", color: "#222222" },
+      { id: "six", duty: "desk" as const, desk: 5, name: "Enam", color: null },
+      { id: "one", duty: "review" as const, desk: 0, name: "Satu", color: null },
+      { id: "four", duty: "desk" as const, desk: 3, name: "Empat", color: null },
+      { id: "three", duty: "desk" as const, desk: 2, name: "Tiga", color: null },
+      { id: "five", duty: "desk" as const, desk: 4, name: "Lima", color: null },
+    ];
+
+    const placement = placeAgents(agents, LAYOUT);
+    const byId = new Map(placement.agents.map((agent) => [agent.id, agent]));
+
+    for (const [id, index] of [
+      ["one", 0],
+      ["two", 1],
+      ["three", 2],
+      ["four", 3],
+      ["five", 4],
+      ["six", 5],
+    ] as const) {
+      const placed = byId.get(id);
+      const [i, j] = deskSeat(index);
+      expect([placed?.i, placed?.j], id).toEqual([i, j]);
+      expect(placed?.desk).toBe(index);
+    }
+
+    expect(placement.occupiedDesks.size).toBe(6);
+    expect(byId.get("two")?.label).toBe("Dua");
+    expect(byId.get("two")?.color).toBe("#222222");
+    expect(byId.get("one")?.label).toBe("Satu");
+
+    // The seventh agent does not sit on a desk or overwrite one.
+    const seven = byId.get("seven");
+    const deskSeats = [0, 1, 2, 3, 4, 5].map(deskSeat);
+    expect(
+      deskSeats.some(([i, j]) => seven?.i === i && seven?.j === j),
+    ).toBe(false);
+  });
+
+  it("treats an out-of-range desk as hotdesk instead of stealing a table", () => {
+    const placement = placeAgents(
+      [
+        { id: "a", duty: "desk", desk: 0 },
+        { id: "far", duty: "desk", desk: 9 },
+      ],
+      LAYOUT,
+    );
+
+    expect(placement.occupiedDesks).toEqual(new Set([0]));
+    expect(placement.agents[1]?.desk).toBe(9);
+    expect([placement.agents[1]?.i, placement.agents[1]?.j]).not.toEqual(
+      deskSeat(0),
+    );
+  });
+
+  it("draws unknown Hermes statuses neutrally without throwing", () => {
+    const { canvas } = stubCanvas();
+    const scene = createScene(canvas, { palette: DAY, layout: LAYOUT });
+
+    expect(() =>
+      scene.draw(
+        {
+          agents: [
+            { id: "mystery", duty: "unknown", name: "Misteri", desk: 2 },
+          ],
+        },
+        { zoom: 1, rotation: 0, panX: 0, panY: 0 },
+      ),
+    ).not.toThrow();
   });
 });

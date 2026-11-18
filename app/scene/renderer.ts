@@ -1,4 +1,4 @@
-import type { Duty } from "../../src/protocol";
+import type { AgentStatus } from "../../src/duty";
 import {
   TH,
   TW,
@@ -13,7 +13,13 @@ import { rotatePoint, type Viewport } from "./viewport";
 
 export interface SceneAgent {
   id: string;
-  duty: Duty;
+  duty: AgentStatus;
+  /** Display name from GET /api/agents; renderer falls back to the id. */
+  name?: string | null;
+  /** Hex color from GET /api/agents; renderer hashes the id as a fallback. */
+  color?: string | null;
+  /** Desk slot 0..5 from GET /api/agents; null means hotdesk/lounge. */
+  desk?: number | null;
 }
 
 export interface SceneSnapshot {
@@ -88,7 +94,9 @@ interface Placement {
   occupiedDesks: Set<number>;
 }
 
-function displayName(id: string): string {
+function displayName(id: string, name?: string | null): string {
+  const provided = name?.trim();
+  if (provided !== undefined && provided.length > 0) return provided;
   const known = AGENT_NAMES[id.toLowerCase()];
   if (known) return known;
   const cleaned = id.replace(/[-_]+/g, " ").trim();
@@ -96,7 +104,9 @@ function displayName(id: string): string {
   return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
 }
 
-function colorFor(id: string): string {
+function colorFor(id: string, color?: string | null): string {
+  const provided = color?.trim();
+  if (provided !== undefined && provided.length > 0) return provided;
   const known = AGENT_COLORS[id.toLowerCase()];
   if (known) return known;
   let hash = 0;
@@ -106,40 +116,74 @@ function colorFor(id: string): string {
   return FALLBACK_COLORS[hash % FALLBACK_COLORS.length];
 }
 
-function placeAgents(agents: SceneAgent[], layout: Layout): Placement {
+/**
+ * Seats agents from their real desk assignment, not their array position.
+ * `desk` is the Hermes-backed slot: 0..5 sits at that layout desk, null/out of
+ * range goes to the hotdesk/lounge zone. Meeting and A2A duties override the
+ * desk because the office activity overlay says where they actually are.
+ */
+export function placeAgents(
+  agents: SceneAgent[],
+  layout: Layout,
+): Placement {
   const deskSeats: Vec2[] = layout.desks.map(([i, j]) => [i, j - 0.65]);
   const meetingSeats = MEETING_SEATS.length > 0 ? MEETING_SEATS : deskSeats;
   const path = layout.MEET_PATH.length > 0 ? layout.MEET_PATH : deskSeats;
   const occupiedDesks = new Set<number>();
-  let deskIndex = 0;
+  let nextFreeDesk = 0;
   let meetingIndex = 0;
   let loungeIndex = 0;
   let pathIndex = 0;
 
+  const loungeSeat = (): Vec2 => {
+    const seat = LOUNGE_SEATS[loungeIndex % LOUNGE_SEATS.length];
+    loungeIndex += 1;
+    return seat;
+  };
+
   const placed = agents.map((agent): PlacedAgent => {
-    let seat: Vec2;
+    let seat: Vec2 | null = null;
+
     if (agent.duty === "meeting") {
       seat = meetingSeats[meetingIndex % meetingSeats.length];
       meetingIndex += 1;
     } else if (agent.duty === "a2a") {
       seat = path[Math.min(path.length - 1, 2 + (pathIndex % 3))];
       pathIndex += 1;
-    } else if (agent.duty === "idle") {
-      seat = LOUNGE_SEATS[loungeIndex % LOUNGE_SEATS.length];
-      loungeIndex += 1;
-    } else {
-      const index = deskIndex % deskSeats.length;
-      deskIndex += 1;
-      occupiedDesks.add(index);
-      seat = deskSeats[index];
+    } else if (typeof agent.desk === "number") {
+      const desk = agent.desk;
+      if (
+        Number.isInteger(desk) &&
+        desk >= 0 &&
+        desk < deskSeats.length &&
+        !occupiedDesks.has(desk)
+      ) {
+        occupiedDesks.add(desk);
+        seat = deskSeats[desk];
+      }
+    } else if (agent.desk === undefined) {
+      // Legacy snapshots carry no desk data: fill free desks in order.
+      while (
+        nextFreeDesk < deskSeats.length &&
+        occupiedDesks.has(nextFreeDesk)
+      ) {
+        nextFreeDesk += 1;
+      }
+      if (nextFreeDesk < deskSeats.length) {
+        occupiedDesks.add(nextFreeDesk);
+        seat = deskSeats[nextFreeDesk];
+        nextFreeDesk += 1;
+      }
     }
+
+    if (seat === null) seat = loungeSeat();
 
     return {
       ...agent,
       i: seat[0],
       j: seat[1],
-      color: colorFor(agent.id),
-      label: displayName(agent.id),
+      color: colorFor(agent.id, agent.color),
+      label: displayName(agent.id, agent.name),
     };
   });
 

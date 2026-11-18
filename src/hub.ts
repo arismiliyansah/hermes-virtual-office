@@ -1,10 +1,10 @@
 import { DurableObject } from "cloudflare:workers";
-import type { Duty } from "./duty";
+import type { AgentStatus, Duty } from "./duty";
 import type { Env } from "./env";
 import type { ServerMsg } from "./protocol";
 
 interface Snapshot {
-  agents: { id: string; duty: Duty }[];
+  agents: { id: string; duty: AgentStatus }[];
   tasks: unknown[];
 }
 

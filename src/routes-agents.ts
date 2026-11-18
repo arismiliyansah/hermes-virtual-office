@@ -12,7 +12,7 @@ import {
   upsertAgent,
   type AgentRow,
 } from "./db";
-import type { Duty } from "./duty";
+import type { AgentStatus, Duty } from "./duty";
 import { HermesError, type AgentSummary } from "./hermes";
 import { rateLimit } from "./ratelimit";
 
@@ -43,7 +43,7 @@ export interface AgentView {
   role: string;
   color: string | null;
   desk: number | null;
-  status: Duty;
+  status: AgentStatus;
 }
 
 type AgentEnv = { Bindings: AuthBindings; Variables: AuthVariables };
@@ -56,10 +56,10 @@ const DUTIES: ReadonlySet<string> = new Set<Duty>([
   "idle",
 ]);
 
-function normalizeDuty(status: unknown): Duty {
+function normalizeDuty(status: unknown): AgentStatus {
   return typeof status === "string" && DUTIES.has(status)
     ? (status as Duty)
-    : "idle";
+    : "unknown";
 }
 
 /** Reserve the smallest free desk (0..DESK_COUNT-1), or null for hotdesk. */

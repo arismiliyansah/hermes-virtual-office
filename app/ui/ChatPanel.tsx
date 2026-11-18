@@ -5,10 +5,12 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   onMount,
 } from "solid-js";
 import * as api from "../api";
 import type { Agent } from "../api";
+import { markChatPending } from "./officeActivity";
 
 type ChatMessage = {
   id: number;
@@ -24,6 +26,7 @@ const STATUS: Record<AgentStatus, { label: string; chip: string }> = {
   meeting: { label: "meeting", chip: "text-meet" },
   a2a: { label: "a2a", chip: "text-a2a" },
   idle: { label: "menganggur", chip: "text-idle" },
+  unknown: { label: "status tak dikenal", chip: "text-idle" },
 };
 
 function statusFor(status: AgentStatus): { label: string; chip: string } {
@@ -100,6 +103,7 @@ export function ChatPanel(
     setDraft("");
     setError("");
     setPendingAgentId(agentId);
+    markChatPending(agentId, true);
 
     try {
       const reply = await api.sendAgentMessage(agentId, text);
@@ -114,6 +118,7 @@ export function ChatPanel(
         ),
       );
     } finally {
+      markChatPending(agentId, false);
       setPendingAgentId(null);
     }
   }
@@ -129,6 +134,11 @@ export function ChatPanel(
       { defer: true },
     ),
   );
+
+  onCleanup(() => {
+    const pending = pendingAgentId();
+    if (pending !== null) markChatPending(pending, false);
+  });
 
   onMount(async () => {
     try {

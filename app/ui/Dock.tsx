@@ -7,7 +7,7 @@ import {
   createSignal,
   on,
 } from "solid-js";
-import type { Duty } from "../../src/protocol";
+import type { AgentStatus } from "../../src/duty";
 import type { Agent } from "../api";
 import { ChatPanel } from "./ChatPanel";
 import { CronPanel } from "./CronPanel";
@@ -34,16 +34,16 @@ function initials(name: string): string {
   return raw.toUpperCase();
 }
 
-function dotFor(duty: Duty): Dot {
+function dotFor(duty: AgentStatus): Dot {
   if (duty === "meeting") return "meet";
   if (duty === "a2a") return "a2a";
-  if (duty === "idle") return "idle";
+  if (duty === "idle" || duty === "unknown") return "idle";
   return "sage";
 }
 
 export interface DockProps {
   agents?: Agent[];
-  duties?: Record<string, Duty>;
+  duties?: Record<string, AgentStatus>;
   selectedAgentId?: string | null;
   onSelectAgent?: (agentId: string) => void;
   meetingTurn?: MeetingTurn | null;

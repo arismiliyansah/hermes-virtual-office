@@ -7,6 +7,7 @@ vi.mock("../api", () => ({
   me: vi.fn(),
   login: vi.fn(),
   logout: vi.fn(),
+  setUnauthorizedHandler: vi.fn(() => () => {}),
 }));
 
 const mocked = vi.mocked(api);
@@ -113,5 +114,57 @@ describe("login touch targets", () => {
 
     await screen.findByRole("form", { name: "Masuk" });
     expectTouchTargets(view.container);
+  });
+});
+
+
+describe("logout and expired sessions", () => {
+  beforeEach(() => {
+    mocked.me.mockResolvedValue({ userId: "owner-1" });
+  });
+
+  it("opens the account menu and logs out back to the login screen", async () => {
+    mocked.logout.mockResolvedValue(undefined);
+
+    render(() => <App />);
+    await screen.findByTestId("dock-sheet");
+
+    fireEvent.click(screen.getByRole("button", { name: "Akun owner" }));
+    const keluar = screen.getByRole("menuitem", { name: "Keluar" });
+    expect(keluar.className).toMatch(/min-h-11/);
+
+    fireEvent.click(keluar);
+
+    await waitFor(() => expect(mocked.logout).toHaveBeenCalledTimes(1));
+    expect(await screen.findByRole("form", { name: "Masuk" })).toBeTruthy();
+  });
+
+  it("returns to login when an API call reports 401", async () => {
+    const captured: { handler: (() => void) | null } = { handler: null };
+    mocked.setUnauthorizedHandler.mockImplementation((handler) => {
+      captured.handler = handler;
+      return () => {
+        captured.handler = null;
+      };
+    });
+
+    render(() => <App />);
+    await screen.findByTestId("dock-sheet");
+
+    captured.handler?.();
+
+    expect(await screen.findByRole("form", { name: "Masuk" })).toBeTruthy();
+  });
+
+  it("still drops the local shell when the logout request fails", async () => {
+    mocked.logout.mockRejectedValue(new Error("offline"));
+
+    render(() => <App />);
+    await screen.findByTestId("dock-sheet");
+
+    fireEvent.click(screen.getByRole("button", { name: "Akun owner" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Keluar" }));
+
+    expect(await screen.findByRole("form", { name: "Masuk" })).toBeTruthy();
   });
 });

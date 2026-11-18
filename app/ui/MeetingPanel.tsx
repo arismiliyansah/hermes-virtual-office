@@ -1,6 +1,7 @@
-import { For, Show, createMemo, createSignal, onMount } from "solid-js";
+import { For, Show, createMemo, createSignal, onCleanup, onMount } from "solid-js";
 import * as api from "../api";
 import type { Agent, MeetingResult } from "../api";
+import { markMeetingParticipants } from "./officeActivity";
 import type { MeetingTurn } from "./useOffice";
 
 function failureText(cause: unknown, fallback: string): string {
@@ -74,6 +75,7 @@ export function MeetingPanel(
 
     props.onClearMeetingTurn?.();
     setMeetingParticipants(participants);
+    markMeetingParticipants(participantIds);
     setStarting(true);
     setError("");
     setResult(null);
@@ -93,6 +95,7 @@ export function MeetingPanel(
       );
       props.onClearMeetingTurn?.();
     } finally {
+      markMeetingParticipants(null);
       setStarting(false);
     }
   }
@@ -120,6 +123,8 @@ export function MeetingPanel(
       setEnding(false);
     }
   }
+
+  onCleanup(() => markMeetingParticipants(null));
 
   onMount(async () => {
     try {

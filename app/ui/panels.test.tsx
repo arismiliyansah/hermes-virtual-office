@@ -6,6 +6,7 @@ import { KanbanPanel } from "./KanbanPanel";
 
 const mocks = vi.hoisted(() => ({
   me: vi.fn(),
+  setUnauthorizedHandler: vi.fn(() => () => {}),
   login: vi.fn(),
   logout: vi.fn(),
   listAgents: vi.fn(),
@@ -279,8 +280,20 @@ describe("App scene", () => {
 
     const lastSnapshot = sceneMock.draw.mock.calls.at(-1)?.[0];
     expect(lastSnapshot.agents).toEqual([
-      { id: "damar", duty: "desk" },
-      { id: "sari", duty: "meeting" },
+      {
+        id: "damar",
+        name: "Damar",
+        color: "#6f9a63",
+        desk: 0,
+        duty: "desk",
+      },
+      {
+        id: "sari",
+        name: "Sari",
+        color: null,
+        desk: 1,
+        duty: "meeting",
+      },
     ]);
     expect(screen.getByRole("toolbar", { name: "Kontrol tampilan kantor" })).toBeTruthy();
   });

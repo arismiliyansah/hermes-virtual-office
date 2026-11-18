@@ -1,5 +1,11 @@
 export type Duty = "meeting" | "a2a" | "desk" | "review" | "idle";
 
+/**
+ * What the office may draw for an agent. Hermes can report a status the SPA
+ * does not know; that must render as neutral, never as a fabricated "idle".
+ */
+export type AgentStatus = Duty | "unknown";
+
 export interface AgentActivity {
   agentId: string;
   taskActive: boolean;

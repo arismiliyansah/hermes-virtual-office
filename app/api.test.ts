@@ -10,6 +10,8 @@ import {
   logout,
   me,
   sendAgentMessage,
+  setCsrfToken,
+  setUnauthorizedHandler,
   updateTaskStatus,
 } from "./api";
 
@@ -199,5 +201,42 @@ describe("api agents and tasks", () => {
       title: "Tulis notulen",
       ownerAgentId: "sari",
     });
+  });
+});
+
+describe("central 401 handling", () => {
+  it("clears the csrf token and notifies once for a protected API 401", async () => {
+    const onUnauthorized = vi.fn();
+    const off = setUnauthorizedHandler(onUnauthorized);
+    setCsrfToken("stale-token");
+    stubFetch(jsonResponse({ error: "unauthorized" }, 401));
+
+    await expect(listTasks()).rejects.toMatchObject({ status: 401 });
+
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+    expect(getCsrfToken()).toBeNull();
+    off();
+  });
+
+  it("does not treat a rejected login as an expired session", async () => {
+    const onUnauthorized = vi.fn();
+    const off = setUnauthorizedHandler(onUnauthorized);
+    stubFetch(jsonResponse({ error: "invalid_credentials" }, 401));
+
+    await expect(login("owner@example.com", "wrong")).rejects.toMatchObject({
+      status: 401,
+    });
+
+    expect(onUnauthorized).not.toHaveBeenCalled();
+    off();
+  });
+
+  it("believes the server after a 401 even if a handler was never registered", async () => {
+    stubFetch(jsonResponse({ error: "unauthorized" }, 401));
+    setCsrfToken("stale-token");
+
+    await expect(listTasks()).rejects.toMatchObject({ status: 401 });
+
+    expect(getCsrfToken()).toBeNull();
   });
 });

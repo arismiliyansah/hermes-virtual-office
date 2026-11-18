@@ -17,6 +17,7 @@ import { backoffMs, useOffice } from "./useOffice";
 
 const mocks = vi.hoisted(() => ({
   me: vi.fn(),
+  setUnauthorizedHandler: vi.fn(() => () => {}),
   login: vi.fn(),
   logout: vi.fn(),
   listAgents: vi.fn(),
@@ -416,6 +417,120 @@ describe("CronPanel", () => {
   });
 });
 
+
+describe("poll-driven office state", () => {
+  it("reflects a changed Hermes status on the next poll without user action", async () => {
+    vi.useFakeTimers();
+    mocks.listAgents
+      .mockResolvedValueOnce(AGENTS)
+      .mockResolvedValue([
+        { ...AGENTS[0], status: "review" },
+        AGENTS[1],
+      ]);
+
+    render(() => <App />);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const first = sceneMock.draw.mock.calls.at(-1)?.[0];
+    expect(first?.agents[0]?.duty).toBe("desk");
+
+    await vi.advanceTimersByTimeAsync(15_000);
+    await vi.advanceTimersByTimeAsync(1);
+
+    const second = sceneMock.draw.mock.calls.at(-1)?.[0];
+    expect(second?.agents[0]).toMatchObject({
+      id: "damar",
+      duty: "review",
+      desk: 0,
+    });
+  });
+
+  it("shows a stale banner and Mesin terputus while polling fails, then clears", async () => {
+    vi.useFakeTimers();
+    mocks.listAgents
+      .mockRejectedValueOnce(new Error("tunnel down"))
+      .mockResolvedValue(AGENTS);
+
+    render(() => <App />);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(screen.getByTestId("stale-banner").textContent).toMatch(
+      /mesin tidak terjangkau/i,
+    );
+    expect(screen.getByTestId("hermes-status").textContent).toContain(
+      "Mesin terputus",
+    );
+
+    // First failure doubles the 15s interval to 30s.
+    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(1);
+
+    expect(screen.queryByTestId("stale-banner")).toBeNull();
+    expect(screen.getByTestId("hermes-status").textContent).toContain(
+      "Mesin terhubung",
+    );
+  });
+
+  it("does not select an agent when a drag ends away from its start", async () => {
+    sceneMock.createScene.mockReturnValue({
+      draw: sceneMock.draw,
+      hitTest: () => "sari",
+    });
+
+    render(() => <App />);
+    const canvas = await screen.findByTestId("office-canvas");
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 20,
+      clientY: 20,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(canvas, {
+      clientX: 90,
+      clientY: 90,
+      pointerType: "mouse",
+    });
+
+    expect(screen.queryByLabelText("Percakapan dengan Sari")).toBeNull();
+
+    fireEvent.pointerDown(canvas, {
+      clientX: 24,
+      clientY: 24,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerUp(canvas, {
+      clientX: 27,
+      clientY: 26,
+      pointerType: "mouse",
+    });
+
+    expect(
+      await screen.findByLabelText("Percakapan dengan Sari"),
+    ).toBeTruthy();
+  });
+
+  it("selects an agent from a short touchend tap", async () => {
+    sceneMock.createScene.mockReturnValue({
+      draw: sceneMock.draw,
+      hitTest: () => "sari",
+    });
+
+    render(() => <App />);
+    const canvas = await screen.findByTestId("office-canvas");
+
+    fireEvent.touchStart(canvas, {
+      touches: [{ clientX: 24, clientY: 24 }],
+    });
+    fireEvent.touchEnd(canvas, {
+      changedTouches: [{ clientX: 26, clientY: 25 }],
+    });
+
+    expect(
+      await screen.findByLabelText("Percakapan dengan Sari"),
+    ).toBeTruthy();
+  });
+});
+
 describe("App realtime, theme and roster", () => {
   it("(f) applies the stored theme to the document and the scene palette", async () => {
     localStorage.clear();
@@ -436,7 +551,7 @@ describe("App realtime, theme and roster", () => {
     });
   });
 
-  it("uses the websocket snapshot once the hub connects", async () => {
+  it("keeps the polled status as the scene baseline after a hub snapshot", async () => {
     render(() => <App />);
 
     await screen.findByTestId("office-canvas");
@@ -458,8 +573,20 @@ describe("App realtime, theme and roster", () => {
     await waitFor(() => {
       const last = sceneMock.draw.mock.calls.at(-1)?.[0];
       expect(last?.agents).toEqual([
-        { id: "damar", duty: "review" },
-        { id: "sari", duty: "a2a" },
+        {
+          id: "damar",
+          name: "Damar",
+          color: "#6f9a63",
+          desk: 0,
+          duty: "desk",
+        },
+        {
+          id: "sari",
+          name: "Sari",
+          color: "#4f7fa8",
+          desk: 1,
+          duty: "meeting",
+        },
       ]);
     });
   });
@@ -483,7 +610,8 @@ describe("App realtime, theme and roster", () => {
     render(() => <App />);
 
     const canvas = await screen.findByTestId("office-canvas");
-    fireEvent.click(canvas, { clientX: 24, clientY: 24 });
+    fireEvent.pointerDown(canvas, { clientX: 24, clientY: 24, pointerType: "touch" });
+    fireEvent.pointerUp(canvas, { clientX: 24, clientY: 24, pointerType: "touch" });
 
     expect(
       await screen.findByLabelText("Percakapan dengan Sari"),

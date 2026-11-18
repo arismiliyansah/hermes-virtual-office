@@ -8,6 +8,7 @@ import {
   onMount,
 } from "solid-js";
 import * as api from "./api";
+import type { AgentStatus } from "../src/duty";
 import type { Agent } from "./api";
 import { LAYOUT } from "./scene/layout";
 import { DAY, NIGHT } from "./scene/palette";
@@ -29,9 +30,11 @@ import {
   type Theme,
 } from "./theme";
 import { Dock } from "./ui/Dock";
+import { officeActivity, overlayDuty } from "./ui/officeActivity";
 import { Login } from "./ui/Login";
 import { SceneToolbar } from "./ui/SceneToolbar";
 import { Topbar } from "./ui/Topbar";
+import { staleMessage, useAgentPoll } from "./ui/useAgentPoll";
 import { useOffice } from "./ui/useOffice";
 
 type Mode = "loading" | "login" | "office";
@@ -125,16 +128,66 @@ function Office(props: {
     }
   }
 
-  function pickAgent(event: MouseEvent): void {
+  // A tap selects; a drag pans. Mobile browsers cancel the synthetic click
+  // after we preventDefault on touchmove, so selection must come from the
+  // pointer/touch stream itself.
+  const TAP_SLOP_PX = 8;
+  const TOUCH_CLICK_GUARD_MS = 500;
+  let press: { x: number; y: number } | null = null;
+  let lastPointerTapAt = 0;
+
+  function pickAt(clientX: number, clientY: number): void {
     const current = scene();
     if (current?.hitTest === undefined || canvas === undefined) return;
 
     const rect = canvas.getBoundingClientRect();
-    const agentId = current.hitTest(
-      event.clientX - rect.left,
-      event.clientY - rect.top,
-    );
+    const agentId = current.hitTest(clientX - rect.left, clientY - rect.top);
     if (agentId !== null) props.onPickAgent(agentId);
+  }
+
+  function isTap(clientX: number, clientY: number): boolean {
+    if (press === null) return false;
+    return Math.hypot(clientX - press.x, clientY - press.y) < TAP_SLOP_PX;
+  }
+
+  function startPress(clientX: number, clientY: number): void {
+    press = { x: clientX, y: clientY };
+  }
+
+  function endPress(clientX: number, clientY: number): void {
+    const tapped = isTap(clientX, clientY);
+    press = null;
+    if (!tapped) return;
+    const agentId = scene()?.hitTest?.(clientX, clientY) ?? null;
+    if (agentId === null) return;
+    lastPointerTapAt = Date.now();
+    pickAt(clientX, clientY);
+  }
+
+  function onPointerDown(event: PointerEvent): void {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    startPress(event.clientX, event.clientY);
+  }
+
+  function onPointerUp(event: PointerEvent): void {
+    if (event.pointerType === "mouse" && event.button !== 0) return;
+    endPress(event.clientX, event.clientY);
+  }
+
+  function onTouchStart(event: TouchEvent): void {
+    const touch = event.touches[0];
+    if (touch !== undefined) startPress(touch.clientX, touch.clientY);
+  }
+
+  function onTouchEnd(event: TouchEvent): void {
+    // A pointerup already handled this tap on devices that emit both.
+    if (Date.now() - lastPointerTapAt < TOUCH_CLICK_GUARD_MS) {
+      press = null;
+      return;
+    }
+    const touch = event.changedTouches[0];
+    if (touch !== undefined) endPress(touch.clientX, touch.clientY);
+    else press = null;
   }
 
   // Re-draw whenever the snapshot or viewport changes. The renderer owns all
@@ -185,7 +238,16 @@ function Office(props: {
         data-testid="office-canvas"
         role="img"
         aria-label="Kantor isometrik Hermes"
-        onClick={pickAgent}
+        onPointerDown={onPointerDown}
+        onPointerUp={onPointerUp}
+        onPointerCancel={() => {
+          press = null;
+        }}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onTouchCancel={() => {
+          press = null;
+        }}
       />
 
       <div class="pointer-events-none absolute left-3 top-3 max-w-[60%] rounded-lg border border-line bg-panel/90 px-3 py-2 text-[11.5px] text-ink-soft shadow-sm">
@@ -208,11 +270,10 @@ function Office(props: {
   );
 }
 
-function OfficeShell() {
+function OfficeShell(props: { onLogout: () => Promise<void> }) {
   const office = useOffice();
+  const poll = useAgentPoll();
   const [theme, setTheme] = createSignal<Theme>(initialTheme());
-  const [restAgents, setRestAgents] = createSignal<Agent[]>([]);
-  const [agentError, setAgentError] = createSignal("");
   const [selectedAgentId, setSelectedAgentId] = createSignal<string | null>(
     null,
   );
@@ -230,48 +291,79 @@ function OfficeShell() {
     }
   }
 
-  const snapshot = createMemo<SceneSnapshot>(() => {
-    if (office.connected()) {
-      const live = Object.entries(office.agents()).map(([id, duty]) => ({
-        id,
-        duty,
+  // Hermes is the baseline; live office activity (meeting, chat, cron) upgrades
+  // it through the same resolveDuty the domain tests cover. Polling replaces
+  // the old one-shot REST fetch, so a server-side status change shows up
+  // without any user action.
+  const sceneAgents = createMemo<SceneSnapshot["agents"]>(() => {
+    const base = poll.agents();
+    if (base.length > 0) {
+      const activity = officeActivity();
+      return base.map((agent) => ({
+        id: agent.id,
+        name: agent.name,
+        color: agent.color,
+        desk: agent.desk,
+        duty: overlayDuty(agent.id, agent.status, activity),
       }));
-      if (live.length > 0) return { agents: live };
     }
 
-    return {
-      agents: restAgents().map((agent) => ({ id: agent.id, duty: agent.status })),
-    };
+    // The first poll may still be in flight; reuse the hub snapshot meanwhile.
+    return Object.entries(office.agents()).map(([id, duty]) => ({ id, duty }));
   });
+
+  const snapshot = createMemo<SceneSnapshot>(() => ({
+    agents: sceneAgents(),
+  }));
+
+  const duties = createMemo<Record<string, AgentStatus>>(() =>
+    Object.fromEntries(sceneAgents().map((agent) => [agent.id, agent.duty])),
+  );
+
+  const stale = createMemo(() =>
+    staleMessage({
+      lastSuccessAt: poll.lastSuccessAt(),
+      failed: poll.lastError() !== null,
+      now: poll.now(),
+    }),
+  );
+
+  const hermesStale = createMemo(
+    () => stale() !== null && poll.lastError() === null,
+  );
 
   const latestEvent = createMemo(() => office.events()[0]?.text ?? "");
-
-  onMount(async () => {
-    try {
-      const agents = await api.listAgents();
-      setRestAgents(Array.isArray(agents) ? agents : []);
-    } catch {
-      setAgentError("Tidak bisa memuat agent kantor. Coba muat ulang halaman.");
-    }
-  });
 
   return (
     <div class="flex h-dvh flex-col bg-bg text-ink">
       <Topbar
         theme={theme()}
-        connected={office.connected()}
+        wsConnected={office.connected()}
+        hermesFailed={poll.lastError() !== null}
+        hermesStale={hermesStale()}
         onThemeChange={changeTheme}
+        onLogout={props.onLogout}
       />
+      <Show when={stale()}>
+        {(message) => (
+          <p
+            class="flex-none border-b border-[#d9a08e] bg-[#fbebe5] px-3 py-2 text-[12px] leading-relaxed text-[#8f3c27]"
+            role="alert"
+            data-testid="stale-banner"
+          >
+            {message()}
+          </p>
+        )}
+      </Show>
       <main class="office-main">
         <Office
           snapshot={snapshot()}
           theme={theme()}
-          error={agentError() || undefined}
           onPickAgent={setSelectedAgentId}
         />
         <Dock
-          agents={restAgents()}
-          duties={office.agents()}
+          agents={poll.agents()}
+          duties={duties()}
           selectedAgentId={selectedAgentId()}
           onSelectAgent={setSelectedAgentId}
           meetingTurn={office.meetingTurn()}
@@ -290,13 +382,18 @@ function OfficeShell() {
 export default function App() {
   const [mode, setMode] = createSignal<Mode>("loading");
 
-  onMount(async () => {
-    try {
-      const session = await api.me();
-      setMode(session === null ? "login" : "office");
-    } catch {
-      setMode("login");
-    }
+  onMount(() => {
+    const off = api.setUnauthorizedHandler(() => setMode("login"));
+    onCleanup(off);
+
+    void (async () => {
+      try {
+        const session = await api.me();
+        setMode(session === null ? "login" : "office");
+      } catch {
+        setMode("login");
+      }
+    })();
   });
 
   async function handleLogin(email: string, password: string): Promise<void> {
@@ -304,10 +401,20 @@ export default function App() {
     setMode("office");
   }
 
+  async function handleLogout(): Promise<void> {
+    try {
+      await api.logout();
+    } catch {
+      // The session cookie may already be gone; the local shell still closes.
+    } finally {
+      setMode("login");
+    }
+  }
+
   return (
     <Show when={mode() !== "loading"} fallback={<Loading />}>
       <Show when={mode() === "office"} fallback={<Login onSubmit={handleLogin} />}>
-        <OfficeShell />
+        <OfficeShell onLogout={handleLogout} />
       </Show>
     </Show>
   );

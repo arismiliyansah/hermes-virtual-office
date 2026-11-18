@@ -1,6 +1,7 @@
-import { Index, Show, createSignal, onMount } from "solid-js";
+import { Index, Show, createSignal, onCleanup, onMount } from "solid-js";
 import * as api from "../api";
 import type { CronJob } from "../api";
+import { markCronRunning } from "./officeActivity";
 
 function failureText(cause: unknown, fallback: string): string {
   const status = (cause as { status?: unknown } | null)?.status;
@@ -16,6 +17,7 @@ export function CronPanel() {
   const [error, setError] = createSignal("");
   const [pending, setPending] = createSignal<string | null>(null);
   const [lastRun, setLastRun] = createSignal("");
+  let activeCronAgent: string | null = null;
 
   async function load(): Promise<void> {
     setLoading(true);
@@ -75,6 +77,8 @@ export function CronPanel() {
     setPending(`${job.id}:run`);
     setError("");
     setLastRun("");
+    activeCronAgent = job.agentId;
+    markCronRunning(job.agentId, true);
 
     try {
       const result = await api.runCron(job.id);
@@ -84,9 +88,15 @@ export function CronPanel() {
         failureText(cause, `Gagal menjalankan cron "${job.name}". Coba lagi.`),
       );
     } finally {
+      markCronRunning(job.agentId, false);
+      activeCronAgent = null;
       setPending(null);
     }
   }
+
+  onCleanup(() => {
+    if (activeCronAgent !== null) markCronRunning(activeCronAgent, false);
+  });
 
   onMount(() => {
     void load();
