@@ -17,6 +17,7 @@ export default defineConfig({
           // hermes.test.ts needs a real node:http server, which workerd cannot reach.
           exclude: [
             ...configDefaults.exclude,
+            "app/**",
             "connector/**",
             "tests/hermes.test.ts",
           ],
