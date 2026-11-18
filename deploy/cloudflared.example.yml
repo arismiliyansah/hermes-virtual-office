@@ -1,0 +1,22 @@
+# Cloudflare Tunnel ingress for Hermes Virtual Office.
+#
+# Copy this file to /etc/cloudflared/config.yml (Linux) or
+# ~/.cloudflared/config.yml (macOS), then replace the tunnel id, credentials
+# path, and hostname. Create the tunnel and DNS record with:
+#
+#   cloudflared tunnel create hermes-office
+#   cloudflared tunnel route dns hermes-office hermes-office.example.com
+#
+# IMPORTANT: the service must point at the auth proxy on port 8787, never at
+# the Hermes gateway on port 8788. The proxy verifies the Worker's HMAC
+# signature; pointing cloudflared straight at Hermes exposes it to anyone who
+# can reach the tunnel hostname.
+
+tunnel: REPLACE_WITH_TUNNEL_ID
+credentials-file: /etc/cloudflared/REPLACE_WITH_TUNNEL_ID.json
+
+ingress:
+  - hostname: hermes-office.example.com
+    service: http://127.0.0.1:8787
+  # Fallback for anything that does not match the hostname above.
+  - service: http_status:404

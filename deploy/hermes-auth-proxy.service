@@ -1,0 +1,27 @@
+[Unit]
+Description=Hermes Virtual Office auth proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Dedicated non-root account. Create it once, for example:
+#   sudo useradd --system --home /opt/hermes-virtual-office --shell /usr/sbin/nologin hvo
+User=hvo
+Group=hvo
+WorkingDirectory=/opt/hermes-virtual-office
+# Contains HVO_HMAC_SECRET, HERMES_UPSTREAM, and PORT. Mode 0600, root-owned;
+# systemd reads it as root before dropping privileges to User=.
+EnvironmentFile=/etc/hvo-auth-proxy.env
+ExecStart=/usr/bin/node /opt/hermes-virtual-office/connector/auth-proxy.mjs
+Restart=always
+RestartSec=2
+
+# The process only needs its secret, loopback networking, and no writable files.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+
+[Install]
+WantedBy=multi-user.target
