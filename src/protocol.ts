@@ -1,5 +1,7 @@
 import type { Duty } from "./duty";
 
+export type { Duty } from "./duty";
+
 export type ServerMsg =
   | {
       type: "snapshot";
