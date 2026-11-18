@@ -5,7 +5,9 @@ import {
   type AuthVariables,
 } from "./auth";
 import {
+  listKnownTaskStatuses,
   listTasks,
+  recordTaskStatuses,
   upsertTask,
   writeAudit,
   type TaskRow,
@@ -82,6 +84,14 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
       await upsertTask(deps.db, hermesFields(task));
     }
 
+    // Keep every status Hermes has ever reported. A board that later drops a
+    // column must still accept transitions to it instead of treating it as a
+    // local-only label.
+    await recordTaskStatuses(
+      deps.db,
+      synced.map((task) => task.status),
+    );
+
     return c.json({ tasks: await listTasks(deps.db) });
   });
 
@@ -141,8 +151,9 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
 
     const id = c.req.param("id");
 
-    // One upstream read decides whether the status is one Hermes actually
-    // uses. Unknown values are local-only labels and must never reach Hermes.
+    // One upstream read plus the persisted history decide whether the status
+    // is one Hermes actually uses. Unknown values are local-only labels and
+    // must never reach Hermes.
     let synced: TaskCard[];
     try {
       synced = await deps.hermes.listTasks();
@@ -152,7 +163,12 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
       throw error;
     }
 
-    if (synced.some((task) => task.status === status)) {
+    const known = new Set([
+      ...synced.map((task) => task.status),
+      ...(await listKnownTaskStatuses(deps.db)),
+    ]);
+
+    if (known.has(status)) {
       let card: TaskCard;
       try {
         card = await deps.hermes.updateTaskStatus(id, status);

@@ -2,6 +2,8 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 // @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
 import initSql from "../migrations/0001_init.sql?raw";
+// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
+import taskStatusesSql from "../migrations/0002_task_statuses.sql?raw";
 import {
   addMinutes,
   createMeeting,
@@ -9,7 +11,9 @@ import {
   getUserByEmail,
   insertUser,
   listAgents,
+  listKnownTaskStatuses,
   listTasks,
+  recordTaskStatuses,
   upsertAgent,
   upsertTask,
   writeAudit,
@@ -34,6 +38,7 @@ function splitSql(sql: string): string[] {
 beforeAll(async () => {
   await applyD1Migrations(db, [
     { name: "0001_init.sql", queries: splitSql(initSql) },
+    { name: "0002_task_statuses.sql", queries: splitSql(taskStatusesSql) },
   ]);
 });
 
@@ -275,6 +280,40 @@ describe("tasks", () => {
 
     expect(task?.updated_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
     expect(task?.updated_at).not.toBe("2000-01-01 00:00:00");
+  });
+});
+
+describe("task statuses", () => {
+  it("applies the 0002 migration with the expected columns", async () => {
+    const columns = await db
+      .prepare("PRAGMA table_info(task_statuses)")
+      .all<{ name: string; notnull: number; pk: number }>();
+
+    expect(columns.results.map((column) => column.name)).toEqual([
+      "status",
+      "seen_at",
+    ]);
+    expect(
+      columns.results.find((column) => column.name === "status"),
+    ).toMatchObject({ pk: 1 });
+    expect(
+      columns.results.find((column) => column.name === "seen_at"),
+    ).toMatchObject({ notnull: 1 });
+  });
+
+  it("records statuses once and lists every known status", async () => {
+    await db.prepare("DELETE FROM task_statuses").run();
+
+    await recordTaskStatuses(db, ["todo", "done", "todo"]);
+    await recordTaskStatuses(db, ["done", "review"]);
+
+    expect(await listKnownTaskStatuses(db)).toEqual(["done", "review", "todo"]);
+
+    const row = await db
+      .prepare("SELECT status, seen_at FROM task_statuses WHERE status = ?")
+      .bind("todo")
+      .first<{ status: string; seen_at: string }>();
+    expect(row?.seen_at).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
   });
 });
 

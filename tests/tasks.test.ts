@@ -3,6 +3,8 @@ import { Hono } from "hono";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 // @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
 import initSql from "../migrations/0001_init.sql?raw";
+// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
+import taskStatusesSql from "../migrations/0002_task_statuses.sql?raw";
 import {
   SESSION_COOKIE,
   csrfProtection,
@@ -12,6 +14,7 @@ import {
   type StartedSession,
 } from "../src/auth";
 import {
+  listKnownTaskStatuses,
   listTasks,
   upsertTask,
   type AuditRow,
@@ -50,6 +53,7 @@ function splitSql(sql: string): string[] {
 beforeAll(async () => {
   await applyD1Migrations(db, [
     { name: "0001_init.sql", queries: splitSql(initSql) },
+    { name: "0002_task_statuses.sql", queries: splitSql(taskStatusesSql) },
   ]);
 });
 
@@ -58,6 +62,7 @@ let session: StartedSession;
 beforeEach(async () => {
   __resetRateLimit();
   await db.prepare("DELETE FROM tasks").run();
+  await db.prepare("DELETE FROM task_statuses").run();
   await db.prepare("DELETE FROM audit").run();
   session = await startSession(USER_ID, SECRET);
 });
@@ -315,6 +320,35 @@ describe("POST /api/tasks", () => {
 });
 
 describe("POST /api/tasks/:id/status", () => {
+  it("(a) keeps a status known after its card leaves the current Hermes board", async () => {
+    const { hermes, state } = stubHermes([
+      task("task-1"),
+      task("task-2", { status: "done" }),
+    ]);
+    const app = appFor(hermes);
+
+    expect((await getTasks(app)).status).toBe(200);
+    expect(await listKnownTaskStatuses(db)).toEqual(["done", "todo"]);
+
+    // The done card disappears; subsequent boards no longer contain "done".
+    state.tasks = [task("task-1")];
+
+    const res = await setStatus(app, "task-1", { status: "done" });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { task: TaskRow };
+    expect(body.task).toMatchObject({
+      id: "task-1",
+      status: "done",
+      office_label: null,
+    });
+    expect(state.calls).toEqual([
+      { kind: "list" },
+      { kind: "list" },
+      { kind: "status", id: "task-1", status: "done" },
+    ]);
+  });
+
   it("(b) stores an unknown status as office_label and does not call updateTaskStatus", async () => {
     await upsertTask(db, {
       id: "task-1",
@@ -345,6 +379,7 @@ describe("POST /api/tasks/:id/status", () => {
       status: "todo",
       office_label: "waiting-for-qa",
     });
+    expect(await listKnownTaskStatuses(db)).toEqual([]);
   });
 
   it("(c) forwards a known status to Hermes and refreshes the mirror", async () => {

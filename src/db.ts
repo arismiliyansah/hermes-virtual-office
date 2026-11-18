@@ -181,6 +181,30 @@ export async function upsertTask(db: D1Database, task: TaskInput): Promise<void>
     .run();
 }
 
+/** Remember every Hermes status ever seen; old rows are never removed. */
+export async function recordTaskStatuses(
+  db: D1Database,
+  statuses: string[],
+): Promise<void> {
+  if (statuses.length === 0) return;
+
+  await db.batch(
+    statuses.map((status) =>
+      db
+        .prepare("INSERT OR IGNORE INTO task_statuses (status) VALUES (?)")
+        .bind(status),
+    ),
+  );
+}
+
+export async function listKnownTaskStatuses(db: D1Database): Promise<string[]> {
+  const { results } = await db
+    .prepare("SELECT status FROM task_statuses ORDER BY status")
+    .all<{ status: string }>();
+
+  return results.map((row) => row.status);
+}
+
 export async function writeAudit(db: D1Database, entry: AuditInput): Promise<number> {
   const result = await db
     .prepare(
