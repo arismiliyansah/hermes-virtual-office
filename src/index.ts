@@ -13,6 +13,7 @@ import type { Env } from "./env";
 import { HermesClient } from "./hermes";
 import { createAgentRoutes } from "./routes-agents";
 import { createCronRoutes } from "./routes-cron";
+import { createMeetingRoutes } from "./routes-meetings";
 import { createTaskRoutes } from "./routes-tasks";
 
 export { OfficeHub } from "./hub";
@@ -122,5 +123,20 @@ async function mountCronRoutes(c: AppContext): Promise<Response> {
 app.use("/api/cron", mountCronRoutes);
 app.use("/api/cron/:id/toggle", mountCronRoutes);
 app.use("/api/cron/:id/run", mountCronRoutes);
+
+async function mountMeetingRoutes(c: AppContext): Promise<Response> {
+  const routes = createMeetingRoutes({
+    hermes: new HermesClient({
+      origin: c.env.HERMES_ORIGIN,
+      secret: c.env.HERMES_HMAC_SECRET,
+    }),
+    db: c.env.DB,
+  });
+
+  return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
+}
+
+app.use("/api/meetings", mountMeetingRoutes);
+app.use("/api/meetings/:id", mountMeetingRoutes);
 
 export default app;
