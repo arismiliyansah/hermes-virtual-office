@@ -20,6 +20,7 @@ import {
   type AgentView,
   type HermesAgentApi,
 } from "../src/routes-agents";
+import { withStubbedFetch } from "./helpers";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
@@ -132,22 +133,6 @@ async function postMessage(
     { method: "POST", headers, body: JSON.stringify(payload) },
     bindings,
   );
-}
-
-type FetchHandler = (...args: Parameters<typeof fetch>) => Promise<Response>;
-
-/** Stub outbound fetch for the production Worker (same isolate as the test). */
-async function withStubbedFetch<T>(
-  handler: FetchHandler,
-  run: () => Promise<T>,
-): Promise<T> {
-  const original = globalThis.fetch;
-  globalThis.fetch = handler as typeof fetch;
-  try {
-    return await run();
-  } finally {
-    globalThis.fetch = original;
-  }
 }
 
 const productionBindings = {

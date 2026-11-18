@@ -27,11 +27,14 @@ export function rateLimit({
     const userId = c.get("userId");
     if (typeof userId !== "string" || userId.length === 0) return next();
 
+    // Different limit configurations are independent budgets; sharing one key
+    // would let the chat limiter consume the tasks limiter's window.
+    const key = `${limit}:${windowMs}:${userId}`;
     const now = Date.now();
-    let window = windows.get(userId);
+    let window = windows.get(key);
     if (window === undefined || now >= window.resetAt) {
       window = { count: 0, resetAt: now + windowMs };
-      windows.set(userId, window);
+      windows.set(key, window);
     }
     window.count += 1;
 

@@ -12,6 +12,7 @@ import { getUserByEmail } from "./db";
 import type { Env } from "./env";
 import { HermesClient } from "./hermes";
 import { createAgentRoutes } from "./routes-agents";
+import { createTaskRoutes } from "./routes-tasks";
 
 export { OfficeHub } from "./hub";
 
@@ -89,5 +90,20 @@ async function mountAgentRoutes(c: AppContext): Promise<Response> {
 
 app.use("/api/agents", mountAgentRoutes);
 app.use("/api/agents/:id/messages", mountAgentRoutes);
+
+async function mountTaskRoutes(c: AppContext): Promise<Response> {
+  const routes = createTaskRoutes({
+    hermes: new HermesClient({
+      origin: c.env.HERMES_ORIGIN,
+      secret: c.env.HERMES_HMAC_SECRET,
+    }),
+    db: c.env.DB,
+  });
+
+  return routes.fetch(withoutApiPrefix(c.req.raw), c.env);
+}
+
+app.use("/api/tasks", mountTaskRoutes);
+app.use("/api/tasks/:id/status", mountTaskRoutes);
 
 export default app;
