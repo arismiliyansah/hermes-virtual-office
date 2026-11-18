@@ -19,6 +19,7 @@ export interface OfficeState {
   agents: Accessor<Record<string, Duty>>;
   events: Accessor<OfficeEvent[]>;
   meetingTurn: Accessor<MeetingTurn | null>;
+  clearMeetingTurn: () => void;
 }
 
 export interface UseOfficeOptions {
@@ -144,5 +145,11 @@ export function useOffice(options: UseOfficeOptions = {}): OfficeState {
     current?.close();
   });
 
-  return { connected, agents, events, meetingTurn };
+  return {
+    connected,
+    agents,
+    events,
+    meetingTurn,
+    clearMeetingTurn: () => setMeetingTurn(null),
+  };
 }

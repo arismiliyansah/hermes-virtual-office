@@ -18,10 +18,16 @@ function initials(name: string): string {
 }
 
 export function MeetingPanel(
-  props: { meetingTurn?: MeetingTurn | null } = {},
+  props: {
+    meetingTurn?: MeetingTurn | null;
+    onClearMeetingTurn?: () => void;
+  } = {},
 ) {
   const [agents, setAgents] = createSignal<Agent[]>([]);
   const [selected, setSelected] = createSignal<string[]>([]);
+  const [meetingParticipants, setMeetingParticipants] = createSignal<Agent[]>(
+    [],
+  );
   const [title, setTitle] = createSignal("Rapat harian");
   const [loading, setLoading] = createSignal(true);
   const [starting, setStarting] = createSignal(false);
@@ -42,6 +48,7 @@ export function MeetingPanel(
   });
 
   function toggleParticipant(id: string): void {
+    if (starting()) return;
     setSelected((previous) =>
       previous.includes(id)
         ? previous.filter((item) => item !== id)
@@ -52,7 +59,8 @@ export function MeetingPanel(
 
   async function start(): Promise<void> {
     const trimmed = title().trim();
-    const participantIds = selectedAgents().map((agent) => agent.id);
+    const participants = [...selectedAgents()];
+    const participantIds = participants.map((agent) => agent.id);
     if (starting()) return;
 
     if (trimmed.length === 0) {
@@ -64,6 +72,8 @@ export function MeetingPanel(
       return;
     }
 
+    props.onClearMeetingTurn?.();
+    setMeetingParticipants(participants);
     setStarting(true);
     setError("");
     setResult(null);
@@ -73,6 +83,7 @@ export function MeetingPanel(
         participantIds,
       });
       setResult(meeting);
+      props.onClearMeetingTurn?.();
     } catch (cause) {
       setError(
         failureText(
@@ -80,6 +91,7 @@ export function MeetingPanel(
           "Gagal memulai rapat. Periksa koneksi lalu coba lagi.",
         ),
       );
+      props.onClearMeetingTurn?.();
     } finally {
       setStarting(false);
     }
@@ -87,7 +99,10 @@ export function MeetingPanel(
 
   async function endMeeting(): Promise<void> {
     const current = result();
-    if (current === null || ending()) return;
+    if (current === null) return;
+
+    props.onClearMeetingTurn?.();
+    if (ending()) return;
 
     setEnding(true);
     setError("");
@@ -155,7 +170,7 @@ export function MeetingPanel(
                 props.meetingTurn?.agentId === agent.id;
               return (
                 <button
-                  class="flex min-h-11 items-center gap-2.5 rounded-[10px] border px-2.5 py-1.5 text-left"
+                  class="flex min-h-11 items-center gap-2.5 rounded-[10px] border px-2.5 py-1.5 text-left disabled:opacity-60"
                   classList={{
                     "border-meet bg-panel": speaking(),
                     "border-accent bg-accent-soft": !speaking() && picked(),
@@ -165,6 +180,7 @@ export function MeetingPanel(
                   aria-pressed={picked()}
                   aria-label={`Pilih ${agent.name}`}
                   data-speaking={speaking() ? "true" : undefined}
+                  disabled={starting()}
                   onClick={() => toggleParticipant(agent.id)}
                 >
                   <span
@@ -245,7 +261,7 @@ export function MeetingPanel(
             </div>
             <p class="text-[11px] text-ink-soft">
               Peserta:{" "}
-              {selectedAgents()
+              {meetingParticipants()
                 .map((agent) => agent.name)
                 .join(", ")}
             </p>

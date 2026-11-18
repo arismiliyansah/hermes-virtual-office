@@ -47,6 +47,7 @@ export interface DockProps {
   selectedAgentId?: string | null;
   onSelectAgent?: (agentId: string) => void;
   meetingTurn?: MeetingTurn | null;
+  onClearMeetingTurn?: () => void;
 }
 
 export function Dock(props: DockProps = {}) {
@@ -160,7 +161,10 @@ export function Dock(props: DockProps = {}) {
             <KanbanPanel />
           </Match>
           <Match when={active() === "Meeting"}>
-            <MeetingPanel meetingTurn={props.meetingTurn ?? null} />
+            <MeetingPanel
+              meetingTurn={props.meetingTurn ?? null}
+              onClearMeetingTurn={props.onClearMeetingTurn}
+            />
           </Match>
           <Match when={active() === "Cron"}>
             <CronPanel />

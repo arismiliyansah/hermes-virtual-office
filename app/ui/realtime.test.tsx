@@ -247,6 +247,9 @@ describe("useOffice", () => {
       text: "Saya setuju.",
     });
 
+    office.clearMeetingTurn();
+    expect(office.meetingTurn()).toBeNull();
+
     for (let index = 0; index <= 20; index += 1) {
       socket.message({
         type: "event",
@@ -268,7 +271,12 @@ describe("MeetingPanel", () => {
       text: string;
     } | null>({ agentId: "sari", text: "Pendapat Sari" });
 
-    render(() => <MeetingPanel meetingTurn={turn()} />);
+    render(() => (
+      <MeetingPanel
+        meetingTurn={turn()}
+        onClearMeetingTurn={() => setTurn(null)}
+      />
+    ));
 
     const sari = await screen.findByRole("button", { name: "Pilih Sari" });
     expect(sari.getAttribute("data-speaking")).toBe("true");
@@ -300,10 +308,54 @@ describe("MeetingPanel", () => {
     expect(await screen.findByText("Notulen: rilis ditunda besok.")).toBeTruthy();
     expect(screen.getByText(/Peserta: Damar, Sari/)).toBeTruthy();
 
+    // The turn highlight is cleared as soon as the meeting result arrives.
+    await waitFor(() => expect(turn()).toBeNull());
+    expect(screen.queryByText("sedang bicara")).toBeNull();
+    expect(
+      document.querySelector('[data-speaking="true"]'),
+    ).toBeNull();
+
     fireEvent.click(screen.getByRole("button", { name: "Akhiri meeting" }));
     await waitFor(() => {
       expect(mocks.getMeeting).toHaveBeenCalledWith("meeting-1");
     });
+  });
+
+  it("keeps the running meeting participants when selection changes", async () => {
+    let resolveMeeting!: (value: MeetingResult) => void;
+    mocks.startMeeting.mockReturnValue(
+      new Promise((resolve) => {
+        resolveMeeting = resolve;
+      }),
+    );
+
+    render(() => <MeetingPanel />);
+
+    await screen.findByRole("button", { name: "Pilih Damar" });
+    fireEvent.click(screen.getByRole("button", { name: "Pilih Damar" }));
+    fireEvent.click(screen.getByRole("button", { name: "Pilih Sari" }));
+    fireEvent.click(screen.getByRole("button", { name: "Mulai meeting" }));
+
+    await waitFor(() => {
+      expect(mocks.startMeeting).toHaveBeenCalledWith({
+        title: "Rapat harian",
+        participantIds: ["damar", "sari"],
+      });
+    });
+
+    const sari = screen.getByRole("button", { name: "Pilih Sari" });
+    expect(sari.hasAttribute("disabled")).toBe(true);
+    fireEvent.click(sari);
+
+    resolveMeeting(MEETING);
+
+    expect(await screen.findByText("Notulen: rilis ditunda besok.")).toBeTruthy();
+    expect(screen.getByText(/Peserta: Damar, Sari/)).toBeTruthy();
+
+    // Selection may change after the result, but it no longer edits the
+    // participants of the meeting that just ran.
+    fireEvent.click(screen.getByRole("button", { name: "Pilih Sari" }));
+    expect(screen.getByText(/Peserta: Damar, Sari/)).toBeTruthy();
   });
 
   it("requires at least two participants before starting", async () => {

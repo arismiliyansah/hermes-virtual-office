@@ -275,6 +275,7 @@ function OfficeShell() {
           selectedAgentId={selectedAgentId()}
           onSelectAgent={setSelectedAgentId}
           meetingTurn={office.meetingTurn()}
+          onClearMeetingTurn={office.clearMeetingTurn}
         />
         <Show when={latestEvent()}>
           <p class="sr-only" aria-live="polite">
