@@ -229,6 +229,27 @@ describe("GET /api/tasks", () => {
     ]);
   });
 
+  it("prunes mirror rows that disappeared from Hermes", async () => {
+    await upsertTask(db, {
+      id: "task-ghost",
+      title: "Dihapus di Hermes",
+      status: "todo",
+      owner_agent: null,
+    });
+    await upsertTask(db, {
+      id: "task-keep",
+      title: "Masih ada",
+      status: "doing",
+      owner_agent: null,
+    });
+
+    const { hermes } = stubHermes([task("task-keep", { status: "doing" })]);
+    const res = await getTasks(appFor(hermes));
+
+    expect(res.status).toBe(200);
+    expect((await listTasks(db)).map((row) => row.id)).toEqual(["task-keep"]);
+  });
+
   it("maps Hermes failures to 502 and leaves the mirror untouched", async () => {
     await upsertTask(db, {
       id: "task-1",
@@ -436,7 +457,7 @@ describe("POST /api/tasks/:id/status", () => {
     expect(body.task).toMatchObject({
       id: "task-1",
       status: "done",
-      office_label: "Amber",
+      office_label: null,
     });
     expect(state.calls).toEqual([
       { kind: "list" },
@@ -444,7 +465,7 @@ describe("POST /api/tasks/:id/status", () => {
     ]);
 
     const row = (await listTasks(db)).find((item) => item.id === "task-1");
-    expect(row).toMatchObject({ status: "done", office_label: "Amber" });
+    expect(row).toMatchObject({ status: "done", office_label: null });
   });
 
   it("returns 404 for an unknown label on a task missing from D1", async () => {

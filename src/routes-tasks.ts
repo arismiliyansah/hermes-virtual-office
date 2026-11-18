@@ -6,8 +6,10 @@ import {
 } from "./auth";
 import { notify, type Broadcast } from "./broadcast";
 import {
+  clearTaskLabel,
   listKnownTaskStatuses,
   listTasks,
+  pruneTasks,
   recordTaskStatuses,
   upsertTask,
   writeAudit,
@@ -85,6 +87,13 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
     for (const task of synced) {
       await upsertTask(deps.db, hermesFields(task));
     }
+
+    // Prune after a successful refresh only: a failed Hermes read must leave
+    // the mirror intact, but a successful one defines exactly which cards exist.
+    await pruneTasks(
+      deps.db,
+      synced.map((task) => task.id),
+    );
 
     // Keep every status Hermes has ever reported. A board that later drops a
     // column must still accept transitions to it instead of treating it as a
@@ -185,6 +194,8 @@ export function createTaskRoutes(deps: TaskRouteDeps): Hono<TaskEnv> {
       }
 
       await upsertTask(deps.db, hermesFields(card));
+      // A real Hermes status supersedes any local-only label.
+      await clearTaskLabel(deps.db, card.id);
       await writeAudit(deps.db, {
         userId: c.get("userId"),
         action: "task.status",

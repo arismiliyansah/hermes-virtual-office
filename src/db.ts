@@ -197,6 +197,37 @@ export async function recordTaskStatuses(
   );
 }
 
+/**
+ * Drop mirror rows Hermes no longer reports. The D1 table is only a mirror:
+ * keeping deleted cards would resurrect them in the board after every refresh.
+ */
+export async function pruneTasks(
+  db: D1Database,
+  keepIds: string[],
+): Promise<void> {
+  if (keepIds.length === 0) {
+    await db.prepare("DELETE FROM tasks").run();
+    return;
+  }
+
+  const placeholders = keepIds.map(() => "?").join(", ");
+  await db
+    .prepare(`DELETE FROM tasks WHERE id NOT IN (${placeholders})`)
+    .bind(...keepIds)
+    .run();
+}
+
+/**
+ * Clear an office-only label. `upsertTask` cannot do it with null because its
+ * COALESCE treats null as "keep the previous label".
+ */
+export async function clearTaskLabel(
+  db: D1Database,
+  id: string,
+): Promise<void> {
+  await db.prepare("UPDATE tasks SET office_label = NULL WHERE id = ?").bind(id).run();
+}
+
 export async function listKnownTaskStatuses(db: D1Database): Promise<string[]> {
   const { results } = await db
     .prepare("SELECT status FROM task_statuses ORDER BY status")
