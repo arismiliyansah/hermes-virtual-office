@@ -1,10 +1,6 @@
-import { applyD1Migrations, env } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { Hono } from "hono";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
-import initSql from "../migrations/0001_init.sql?raw";
-// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
-import taskStatusesSql from "../migrations/0002_task_statuses.sql?raw";
 import {
   SESSION_COOKIE,
   csrfProtection,
@@ -23,6 +19,7 @@ import {
   type HermesCronApi,
 } from "../src/routes-cron";
 import { withStubbedFetch } from "./helpers";
+import { applyAllMigrations } from "./migrations";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
@@ -33,21 +30,9 @@ type TestEnv = {
   Variables: AuthVariables;
 };
 
-function splitSql(sql: string): string[] {
-  return sql
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .join("\n")
-    .split(";")
-    .map((query) => query.trim())
-    .filter(Boolean);
-}
 
 beforeAll(async () => {
-  await applyD1Migrations(db, [
-    { name: "0001_init.sql", queries: splitSql(initSql) },
-    { name: "0002_task_statuses.sql", queries: splitSql(taskStatusesSql) },
-  ]);
+  await applyAllMigrations(db);
 });
 
 let session: StartedSession;

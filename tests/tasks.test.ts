@@ -1,10 +1,6 @@
-import { applyD1Migrations, env } from "cloudflare:test";
+import { env } from "cloudflare:test";
 import { Hono } from "hono";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
-// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
-import initSql from "../migrations/0001_init.sql?raw";
-// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
-import taskStatusesSql from "../migrations/0002_task_statuses.sql?raw";
 import {
   SESSION_COOKIE,
   csrfProtection,
@@ -30,6 +26,7 @@ import {
   type HermesTaskApi,
 } from "../src/routes-tasks";
 import { withStubbedFetch } from "./helpers";
+import { applyAllMigrations } from "./migrations";
 
 const db = (env as unknown as { DB: D1Database }).DB;
 const SECRET = "dev-secret";
@@ -40,21 +37,9 @@ type TestEnv = {
   Variables: AuthVariables;
 };
 
-function splitSql(sql: string): string[] {
-  return sql
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .join("\n")
-    .split(";")
-    .map((query) => query.trim())
-    .filter(Boolean);
-}
 
 beforeAll(async () => {
-  await applyD1Migrations(db, [
-    { name: "0001_init.sql", queries: splitSql(initSql) },
-    { name: "0002_task_statuses.sql", queries: splitSql(taskStatusesSql) },
-  ]);
+  await applyAllMigrations(db);
 });
 
 let session: StartedSession;
@@ -63,6 +48,13 @@ beforeEach(async () => {
   __resetRateLimit();
   await db.prepare("DELETE FROM tasks").run();
   await db.prepare("DELETE FROM task_statuses").run();
+  // Migration 0003 seeds the canonical board columns; restore it because the
+  // tests need a clean slate between cases.
+  await db
+    .prepare(
+      "INSERT INTO task_statuses (status) VALUES ('todo'), ('doing'), ('review'), ('done')",
+    )
+    .run();
   await db.prepare("DELETE FROM audit").run();
   session = await startSession(USER_ID, SECRET);
 });
@@ -320,6 +312,34 @@ describe("POST /api/tasks", () => {
 });
 
 describe("POST /api/tasks/:id/status", () => {
+  it("(a) moves a card to Done on a fresh board that has no Done card yet", async () => {
+    const { hermes, state } = stubHermes([
+      task("task-1", { status: "review" }),
+      task("task-2", { status: "todo" }),
+    ]);
+    const app = appFor(hermes);
+
+    expect((await getTasks(app)).status).toBe(200);
+    expect(
+      (await listTasks(db)).some((row) => row.status === "done"),
+    ).toBe(false);
+
+    // Migration 0003 seeds the canonical statuses, so "done" is known even
+    // though no card currently carries it.
+    expect(await listKnownTaskStatuses(db)).toContain("done");
+
+    const res = await setStatus(app, "task-1", { status: "done" });
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { task: TaskRow };
+    expect(body.task).toMatchObject({ id: "task-1", status: "done" });
+    expect(state.calls).toContainEqual({
+      kind: "status",
+      id: "task-1",
+      status: "done",
+    });
+  });
+
   it("(a) keeps a status known after its card leaves the current Hermes board", async () => {
     const { hermes, state } = stubHermes([
       task("task-1"),
@@ -328,7 +348,12 @@ describe("POST /api/tasks/:id/status", () => {
     const app = appFor(hermes);
 
     expect((await getTasks(app)).status).toBe(200);
-    expect(await listKnownTaskStatuses(db)).toEqual(["done", "todo"]);
+    expect(await listKnownTaskStatuses(db)).toEqual([
+      "doing",
+      "done",
+      "review",
+      "todo",
+    ]);
 
     // The done card disappears; subsequent boards no longer contain "done".
     state.tasks = [task("task-1")];
@@ -379,7 +404,12 @@ describe("POST /api/tasks/:id/status", () => {
       status: "todo",
       office_label: "waiting-for-qa",
     });
-    expect(await listKnownTaskStatuses(db)).toEqual([]);
+    expect(await listKnownTaskStatuses(db)).toEqual([
+      "doing",
+      "done",
+      "review",
+      "todo",
+    ]);
   });
 
   it("(c) forwards a known status to Hermes and refreshes the mirror", async () => {

@@ -1,7 +1,6 @@
-import { applyD1Migrations, env, SELF } from "cloudflare:test";
+import { env, SELF } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-// @ts-expect-error Vite inlines ?raw imports; this project has no ambient declaration for them.
-import initSql from "../migrations/0001_init.sql?raw";
+import { applyAllMigrations } from "./migrations";
 import {
   SESSION_COOKIE,
   createSession,
@@ -17,15 +16,6 @@ const OWNER_ID = "owner-1";
 const OWNER_EMAIL = "owner@example.com";
 const OWNER_PASSWORD = "hunter2-correct";
 
-function splitSql(sql: string): string[] {
-  return sql
-    .split("\n")
-    .filter((line) => !line.trimStart().startsWith("--"))
-    .join("\n")
-    .split(";")
-    .map((query) => query.trim())
-    .filter(Boolean);
-}
 
 function b64url(bytes: Uint8Array): string {
   return btoa(String.fromCharCode(...bytes))
@@ -84,9 +74,7 @@ function withSession(token: string): Record<string, string> {
 }
 
 beforeAll(async () => {
-  await applyD1Migrations(db, [
-    { name: "0001_init.sql", queries: splitSql(initSql) },
-  ]);
+  await applyAllMigrations(db);
   await insertUser(db, {
     id: OWNER_ID,
     email: OWNER_EMAIL,
