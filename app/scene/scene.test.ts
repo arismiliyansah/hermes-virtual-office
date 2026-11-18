@@ -321,6 +321,24 @@ describe("desk placement from GET /api/agents", () => {
     ).toBe(false);
   });
 
+  it("sends an idle agent to the lounge even when its desk data is set", () => {
+    const placement = placeAgents(
+      [
+        { id: "idle-1", duty: "idle", desk: 0 },
+        { id: "worker", duty: "desk", desk: 1 },
+      ],
+      LAYOUT,
+    );
+
+    const idle = placement.agents.find((agent) => agent.id === "idle-1");
+    const [deskI, deskJ] = deskSeat(0);
+
+    // Idle must not take the chair or light up the desk; desk 1 is the only
+    // occupied table.
+    expect([idle?.i, idle?.j]).not.toEqual([deskI, deskJ]);
+    expect(placement.occupiedDesks).toEqual(new Set([1]));
+  });
+
   it("treats an out-of-range desk as hotdesk instead of stealing a table", () => {
     const placement = placeAgents(
       [

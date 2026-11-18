@@ -200,6 +200,11 @@ export async function recordTaskStatuses(
 /**
  * Drop mirror rows Hermes no longer reports. The D1 table is only a mirror:
  * keeping deleted cards would resurrect them in the board after every refresh.
+ *
+ * D1 allows at most 100 bound parameters per statement, so the stale rows are
+ * deleted in chunks. Comparing local ids instead of sending every kept id into
+ * a NOT IN (...) is important: chunking NOT IN lists would delete kept rows
+ * that happen to fall outside the current chunk.
  */
 export async function pruneTasks(
   db: D1Database,
@@ -210,11 +215,23 @@ export async function pruneTasks(
     return;
   }
 
-  const placeholders = keepIds.map(() => "?").join(", ");
-  await db
-    .prepare(`DELETE FROM tasks WHERE id NOT IN (${placeholders})`)
-    .bind(...keepIds)
-    .run();
+  const keep = new Set(keepIds);
+  const { results } = await db
+    .prepare("SELECT id FROM tasks")
+    .all<{ id: string }>();
+  const stale = results
+    .map((row) => row.id)
+    .filter((id) => !keep.has(id));
+
+  const chunkSize = 90;
+  for (let start = 0; start < stale.length; start += chunkSize) {
+    const chunk = stale.slice(start, start + chunkSize);
+    const placeholders = chunk.map(() => "?").join(", ");
+    await db
+      .prepare(`DELETE FROM tasks WHERE id IN (${placeholders})`)
+      .bind(...chunk)
+      .run();
+  }
 }
 
 /**

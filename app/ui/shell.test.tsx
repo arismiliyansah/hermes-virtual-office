@@ -98,6 +98,33 @@ describe("responsive dock", () => {
     expect(handle.getAttribute("aria-expanded")).toBe("false");
   });
 
+  it("keeps both theme buttons visible and unclipped in the mobile topbar", async () => {
+    render(() => <App />);
+    await screen.findByTestId("dock-sheet");
+
+    // happy-dom has no layout engine, so assert the structural invariants that
+    // prevent clipping: the bar may wrap, the theme group cannot shrink or
+    // clip, and the Hermes pill moves to its own full-width row on mobile.
+    const header = document.querySelector("header");
+    expect(header?.className).toMatch(/flex-wrap/);
+
+    const themeGroup = screen.getByRole("group", { name: "Tema" });
+    expect(themeGroup.className).not.toMatch(/overflow-hidden/);
+    expect(themeGroup.className).toMatch(/shrink-0/);
+
+    for (const label of ["Siang", "Malam"]) {
+      const button = screen.getByRole("button", { name: label });
+      expect(button.className).not.toMatch(/(^|\s)hidden(\s|$)/);
+      expect(button.className).not.toMatch(/max-w|truncate/);
+      expect(button.className).toMatch(/min-h-11/);
+    }
+
+    const hermes = screen.getByTestId("hermes-status");
+    expect(hermes.className).toMatch(/order-last/);
+    expect(hermes.className).toMatch(/w-full/);
+    expect(hermes.className).not.toMatch(/(^|\s)hidden(\s|$)/);
+  });
+
   it("gives every office control a 44px touch target", async () => {
     const view = render(() => <App />);
 

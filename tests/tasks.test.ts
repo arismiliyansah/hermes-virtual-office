@@ -250,6 +250,28 @@ describe("GET /api/tasks", () => {
     expect((await listTasks(db)).map((row) => row.id)).toEqual(["task-keep"]);
   });
 
+  it("prunes with more than 100 Hermes ids without exhausting D1 binds", async () => {
+    const keep = Array.from({ length: 120 }, (_, index) => `task-${index}`);
+    const ghosts = Array.from({ length: 5 }, (_, index) => `ghost-${index}`);
+
+    await db.batch(
+      [...keep, ...ghosts].map((id) =>
+        db
+          .prepare("INSERT INTO tasks (id, title, status) VALUES (?, ?, ?)")
+          .bind(id, id, "todo"),
+      ),
+    );
+
+    const { hermes } = stubHermes(keep.map((id) => task(id)));
+    const res = await getTasks(appFor(hermes));
+
+    expect(res.status).toBe(200);
+    const rows = await listTasks(db);
+    expect(rows).toHaveLength(120);
+    expect(rows.map((row) => row.id).sort()).toEqual([...keep].sort());
+    expect(rows.some((row) => row.id.startsWith("ghost-"))).toBe(false);
+  });
+
   it("maps Hermes failures to 502 and leaves the mirror untouched", async () => {
     await upsertTask(db, {
       id: "task-1",

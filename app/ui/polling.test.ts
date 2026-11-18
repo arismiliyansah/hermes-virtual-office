@@ -240,6 +240,23 @@ describe("office activity overlay", () => {
     expect(overlayDuty("citra", "review", officeActivity())).toBe("review");
   });
 
+  it("only raises priority and never demotes meeting or a2a", () => {
+    markChatPending("damar", true);
+    markCronRunning("damar", true);
+
+    // meeting (4) beats desk (2)
+    expect(overlayDuty("damar", "meeting", officeActivity())).toBe("meeting");
+
+    // a2a (3) beats desk (2)
+    expect(overlayDuty("damar", "a2a", officeActivity())).toBe("a2a");
+
+    // review (1) is lower than desk (2), so chat upgrades it
+    expect(overlayDuty("damar", "review", officeActivity())).toBe("desk");
+
+    // unknown is neutral, concrete activity upgrades it
+    expect(overlayDuty("damar", "unknown", officeActivity())).toBe("desk");
+  });
+
   it("meeting beats every other activity and clears cleanly", () => {
     markMeetingParticipants(["damar"]);
     markChatPending("damar", true);

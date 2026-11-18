@@ -29,10 +29,10 @@ export function Topbar(props: TopbarProps) {
   }
 
   return (
-    <header class="relative flex h-14 flex-none items-center gap-2 border-b border-line bg-panel px-3 sm:gap-3.5 sm:px-[18px]">
-      <div class="flex items-center gap-2">
+    <header class="relative flex min-h-14 flex-none flex-wrap items-center gap-2 border-b border-line bg-panel px-3 py-1.5 sm:gap-3.5 sm:px-[18px]">
+      <div class="flex shrink-0 items-center gap-2">
         <span class="gem h-[18px] w-[18px]" aria-hidden="true" />
-        <span class="text-[15px] font-bold">Hermes Office</span>
+        <span class="whitespace-nowrap text-[15px] font-bold">Hermes Office</span>
       </div>
 
       <span class="hidden border-l border-line pl-3.5 text-[13px] text-ink-soft sm:inline">
@@ -42,7 +42,7 @@ export function Topbar(props: TopbarProps) {
       <span class="flex-1" />
 
       <div
-        class="flex min-h-8 items-center gap-2 rounded-full border border-line bg-panel-2 px-2 text-[12.5px] text-ink-soft sm:px-3"
+        class="flex min-h-8 shrink-0 items-center gap-2 rounded-full border border-line bg-panel-2 px-2 text-[12.5px] text-ink-soft sm:px-3"
         aria-label={`Realtime ${props.wsConnected ? "terhubung" : "terputus"}`}
         role="status"
       >
@@ -60,7 +60,7 @@ export function Topbar(props: TopbarProps) {
       </div>
 
       <div
-        class="flex min-h-8 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold"
+        class="order-last flex min-h-8 w-full shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-full border px-2 text-[11px] font-semibold sm:order-none sm:w-auto sm:justify-start"
         classList={{
           "border-[#d9a08e] bg-[#fbebe5] text-[#8f3c27]": props.hermesFailed,
           "border-line bg-panel-2 text-ink-soft": !props.hermesFailed,
@@ -93,12 +93,12 @@ export function Topbar(props: TopbarProps) {
       </div>
 
       <div
-        class="flex overflow-hidden rounded-lg border border-line"
+        class="flex shrink-0 rounded-lg border border-line"
         role="group"
         aria-label="Tema"
       >
         <button
-          class="min-h-11 px-2.5 text-xs font-semibold"
+          class="min-h-11 rounded-l-lg px-2.5 text-xs font-semibold"
           classList={{
             "bg-panel-2 text-ink": props.theme === "day",
             "text-ink-soft": props.theme !== "day",
@@ -110,7 +110,7 @@ export function Topbar(props: TopbarProps) {
           Siang
         </button>
         <button
-          class="min-h-11 px-2.5 text-xs font-semibold"
+          class="min-h-11 rounded-r-lg px-2.5 text-xs font-semibold"
           classList={{
             "bg-panel-2 text-ink": props.theme === "night",
             "text-ink-soft": props.theme !== "night",
@@ -123,7 +123,7 @@ export function Topbar(props: TopbarProps) {
         </button>
       </div>
 
-      <div class="relative">
+      <div class="relative shrink-0">
         <button
           class="flex min-h-11 min-w-11 items-center justify-center rounded-full"
           type="button"

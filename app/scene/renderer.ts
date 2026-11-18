@@ -150,6 +150,10 @@ export function placeAgents(
     } else if (agent.duty === "a2a") {
       seat = path[Math.min(path.length - 1, 2 + (pathIndex % 3))];
       pathIndex += 1;
+    } else if (agent.duty === "idle") {
+      // Idle agents relax in the lounge even when D1 still stores a desk for
+      // them; the desk must not look occupied (spec §8.6).
+      seat = null;
     } else if (typeof agent.desk === "number") {
       const desk = agent.desk;
       if (

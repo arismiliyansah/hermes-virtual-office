@@ -1,5 +1,5 @@
 import { createSignal, type Accessor } from "solid-js";
-import { resolveDuty, type AgentStatus } from "../../src/duty";
+import { resolveDuty, type AgentStatus, type Duty } from "../../src/duty";
 
 /**
  * Live office activity, owned by the panels that know about it. The scene
@@ -58,6 +58,15 @@ export function __resetOfficeActivity(): void {
   setActivity(emptyActivity());
 }
 
+/** Strict priority from spec §8.6; higher wins. */
+const PRIORITY: Record<Duty, number> = {
+  idle: 0,
+  review: 1,
+  desk: 2,
+  a2a: 3,
+  meeting: 4,
+};
+
 export function overlayDuty(
   agentId: string,
   base: AgentStatus,
@@ -73,6 +82,11 @@ export function overlayDuty(
     reviewOf: null,
   });
 
-  // The Hermes status is the baseline; activity only upgrades it.
-  return duty === "idle" ? base : duty;
+  if (duty === "idle") return base;
+  // Unknown is neutral, so any concrete office activity is an upgrade.
+  if (base === "unknown") return duty;
+
+  // Activity may only raise priority. A pending chat must not pull a meeting
+  // participant or an A2A agent down to "desk".
+  return PRIORITY[duty] > PRIORITY[base] ? duty : base;
 }
