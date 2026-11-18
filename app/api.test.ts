@@ -2,10 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CSRF_STORAGE_KEY,
   clearCsrfToken,
+  createTask,
   getCsrfToken,
+  listAgents,
+  listTasks,
   login,
   logout,
   me,
+  sendAgentMessage,
+  updateTaskStatus,
 } from "./api";
 
 const originalFetch = globalThis.fetch;
@@ -88,6 +93,111 @@ describe("api", () => {
 
     await expect(login("owner@example.com", "wrong")).rejects.toMatchObject({
       status: 401,
+    });
+  });
+});
+
+describe("api agents and tasks", () => {
+  it("unwraps the agent list from GET /api/agents", async () => {
+    const agents = [
+      {
+        id: "damar",
+        name: "Damar",
+        role: "Reviewer",
+        color: null,
+        desk: 0,
+        status: "desk",
+      },
+    ];
+    const fetchMock = stubFetch(jsonResponse({ agents }));
+
+    await expect(listAgents()).resolves.toEqual(agents);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/agents",
+      expect.objectContaining({ method: "GET", credentials: "include" }),
+    );
+  });
+
+  it("posts the exact message text with the csrf header", async () => {
+    stubFetch(jsonResponse({ csrf: "csrf-token-123" }));
+    await login("owner@example.com", "hunter2-correct");
+
+    const fetchMock = stubFetch(
+      jsonResponse({ reply: "Halo juga", sessionId: "session-1" }),
+    );
+
+    await expect(sendAgentMessage("damar", "Halo")).resolves.toEqual({
+      reply: "Halo juga",
+      sessionId: "session-1",
+    });
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/agents/damar/messages");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({ text: "Halo" });
+    expect(new Headers(init.headers).get("x-csrf-token")).toBe("csrf-token-123");
+  });
+
+  it("sends the exact task status body", async () => {
+    stubFetch(jsonResponse({ csrf: "csrf-token-123" }));
+    await login("owner@example.com", "hunter2-correct");
+
+    const task = {
+      id: "t1",
+      title: "Audit tunnel",
+      status: "done",
+      office_label: null,
+      owner_agent: "damar",
+      updated_at: null,
+    };
+    const fetchMock = stubFetch(jsonResponse({ task }));
+
+    await expect(updateTaskStatus("t1", "done")).resolves.toEqual(task);
+
+    const [url, init] = fetchMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/tasks/t1/status");
+    expect(JSON.parse(String(init.body))).toEqual({ status: "done" });
+  });
+
+  it("unwraps tasks and creates one with an optional owner", async () => {
+    stubFetch(jsonResponse({ csrf: "csrf-token-123" }));
+    await login("owner@example.com", "hunter2-correct");
+
+    const task = {
+      id: "t2",
+      title: "Tulis notulen",
+      status: "todo",
+      office_label: null,
+      owner_agent: "sari",
+      updated_at: null,
+    };
+
+    const listMock = stubFetch(jsonResponse({ tasks: [task] }));
+    await expect(listTasks()).resolves.toEqual([task]);
+    expect(listMock).toHaveBeenCalledWith(
+      "/api/tasks",
+      expect.objectContaining({ method: "GET" }),
+    );
+
+    const createMock = stubFetch(jsonResponse({ task }, 201));
+    await expect(
+      createTask({ title: "Tulis notulen", ownerAgentId: "sari" }),
+    ).resolves.toEqual(task);
+
+    const [url, init] = createMock.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/api/tasks");
+    expect(JSON.parse(String(init.body))).toEqual({
+      title: "Tulis notulen",
+      ownerAgentId: "sari",
     });
   });
 });

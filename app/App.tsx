@@ -1,10 +1,33 @@
-import { Show, createSignal, onMount } from "solid-js";
+import {
+  Show,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+} from "solid-js";
 import * as api from "./api";
+import { LAYOUT } from "./scene/layout";
+import { DAY } from "./scene/palette";
+import {
+  createScene,
+  type Scene,
+  type SceneSnapshot,
+} from "./scene/renderer";
+import {
+  bindSceneViewport,
+  defaultViewport,
+  loadViewport,
+  saveViewport,
+  type Viewport,
+} from "./scene/viewport";
 import { Dock } from "./ui/Dock";
 import { Login } from "./ui/Login";
+import { SceneToolbar } from "./ui/SceneToolbar";
 import { Topbar } from "./ui/Topbar";
 
 type Mode = "loading" | "login" | "office";
+
+const SAVE_VIEWPORT_DELAY = 400;
 
 function Loading() {
   return (
@@ -14,41 +37,117 @@ function Loading() {
   );
 }
 
-function OfficePlaceholder() {
+function Office() {
+  const [snapshot, setSnapshot] = createSignal<SceneSnapshot>({ agents: [] });
+  const [viewport, setViewport] = createSignal<Viewport>({
+    ...defaultViewport,
+  });
+  const [scene, setScene] = createSignal<Scene | null>(null);
+  const [error, setError] = createSignal("");
+
+  let canvas: HTMLCanvasElement | undefined;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
+  let resizeObserver: ResizeObserver | undefined;
+
+  function scheduleSave(next: Viewport): void {
+    if (saveTimer !== undefined) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = undefined;
+      saveViewport(next);
+    }, SAVE_VIEWPORT_DELAY);
+  }
+
+  function applyViewport(next: Viewport): void {
+    setViewport(next);
+    scheduleSave(next);
+  }
+
+  function paint(): void {
+    const current = scene();
+    if (current === null) return;
+
+    try {
+      current.draw(snapshot(), viewport());
+    } catch {
+      setError("Tidak bisa menggambar kantor di perangkat ini.");
+    }
+  }
+
+  async function loadAgents(): Promise<void> {
+    try {
+      const agents = await api.listAgents();
+      const safe = Array.isArray(agents) ? agents : [];
+      setSnapshot({
+        agents: safe.map((agent) => ({ id: agent.id, duty: agent.status })),
+      });
+    } catch {
+      setError("Tidak bisa memuat agent kantor. Coba muat ulang halaman.");
+    }
+  }
+
+  // Re-draw whenever the snapshot or viewport changes. The renderer owns all
+  // canvas geometry; App only owns state and persistence.
+  createEffect(paint);
+
+  onMount(() => {
+    setViewport(loadViewport());
+
+    if (canvas === undefined) return;
+
+    try {
+      setScene(createScene(canvas, { palette: DAY, layout: LAYOUT }));
+    } catch {
+      setError("Tidak bisa menyiapkan panggung kantor.");
+    }
+
+    const unbind = bindSceneViewport(canvas, () => viewport(), applyViewport);
+    onCleanup(unbind);
+
+    if (typeof ResizeObserver !== "undefined") {
+      resizeObserver = new ResizeObserver(() => paint());
+      resizeObserver.observe(canvas);
+      onCleanup(() => resizeObserver?.disconnect());
+    }
+
+    void loadAgents();
+  });
+
+  onCleanup(() => {
+    if (saveTimer !== undefined) clearTimeout(saveTimer);
+    saveViewport(viewport());
+  });
+
   return (
     <section
-      class="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4"
+      class="relative flex min-h-0 flex-1 overflow-hidden bg-bg"
       aria-label="Kantor"
     >
-      <div class="absolute left-4 top-4 rounded-lg border border-line bg-panel/90 px-3 py-2 text-[11.5px] text-ink-soft shadow-sm">
-        Pratinjau kantor · 6 meja
+      <canvas
+        ref={(element) => {
+          canvas = element;
+        }}
+        class="h-full w-full touch-none select-none"
+        data-testid="office-canvas"
+        role="img"
+        aria-label="Kantor isometrik Hermes"
+      />
+
+      <div class="pointer-events-none absolute left-3 top-3 rounded-lg border border-line bg-panel/90 px-3 py-2 text-[11.5px] text-ink-soft shadow-sm">
+        Pratinjau kantor · {snapshot().agents.length} agent
       </div>
-      <div class="max-w-md text-center">
-        <div class="gem mx-auto h-12 w-12" aria-hidden="true" />
-        <h1 class="mt-4 text-xl font-bold tracking-tight">Kantor Pusat</h1>
-        <p class="mt-2 text-sm leading-relaxed text-ink-soft">
-          Panggung isometrik dan aktivitas agent akan tampil di sini. Untuk
-          sementara, ruang ini disiapkan agar layout desktop dan mobile bisa
-          diuji.
+
+      <div class="pointer-events-none absolute bottom-3 right-3 z-10">
+        <SceneToolbar viewport={viewport()} onChange={applyViewport} />
+      </div>
+
+      <Show when={error()}>
+        <p
+          class="absolute bottom-3 left-3 max-w-[60%] rounded-lg border border-[#d9a08e] bg-[#fbebe5] px-3 py-2 text-[11.5px] leading-relaxed text-[#8f3c27] shadow-sm"
+          role="alert"
+        >
+          {error()}
         </p>
-        <div class="mt-5 flex flex-wrap justify-center gap-2 text-[11.5px] text-ink-soft">
-          <span class="rounded-full border border-line bg-panel px-3 py-1.5">
-            <i class="mr-1.5 inline-block h-2 w-2 rounded-full bg-sage" />
-            bekerja
-          </span>
-          <span class="rounded-full border border-line bg-panel px-3 py-1.5">
-            <i class="mr-1.5 inline-block h-2 w-2 rounded-full bg-meet" />
-            meeting
-          </span>
-          <span class="rounded-full border border-line bg-panel px-3 py-1.5">
-            <i class="mr-1.5 inline-block h-2 w-2 rounded-full bg-idle" />
-            menganggur
-          </span>
-        </div>
-      </div>
-      <div class="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full border border-line bg-panel/90 px-3 py-1.5 text-[11px] text-ink-soft shadow-sm">
-        cubit untuk zoom · geser untuk pan
-      </div>
+      </Show>
     </section>
   );
 }
@@ -76,7 +175,7 @@ export default function App() {
         <div class="flex h-dvh flex-col bg-bg text-ink">
           <Topbar />
           <main class="office-main">
-            <OfficePlaceholder />
+            <Office />
             <Dock />
           </main>
         </div>

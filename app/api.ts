@@ -1,7 +1,37 @@
+import type { Duty } from "../src/protocol";
+
 export const CSRF_STORAGE_KEY = "hermes-office-csrf";
 
 export interface MeResponse {
   userId: string;
+}
+
+export interface Agent {
+  id: string;
+  name: string;
+  role: string;
+  color: string | null;
+  desk: number | null;
+  status: Duty;
+}
+
+export interface AgentReply {
+  reply: string;
+  sessionId: string;
+}
+
+export interface Task {
+  id: string;
+  title: string | null;
+  status: string | null;
+  office_label: string | null;
+  owner_agent: string | null;
+  updated_at: string | null;
+}
+
+export interface NewTask {
+  title: string;
+  ownerAgentId?: string | null;
 }
 
 export interface LoginResponse {
@@ -134,4 +164,62 @@ export async function logout(): Promise<void> {
   } finally {
     clearCsrfToken();
   }
+}
+
+export async function listAgents(): Promise<Agent[]> {
+  const response = await request("/api/agents");
+  if (!response.ok) await throwApiError(response);
+
+  const body = (await response.json()) as { agents?: Agent[] };
+  return Array.isArray(body.agents) ? body.agents : [];
+}
+
+export async function sendAgentMessage(
+  agentId: string,
+  text: string,
+): Promise<AgentReply> {
+  const response = await request(
+    `/api/agents/${encodeURIComponent(agentId)}/messages`,
+    { method: "POST", body: { text } },
+  );
+  if (!response.ok) await throwApiError(response);
+
+  return (await response.json()) as AgentReply;
+}
+
+export async function listTasks(): Promise<Task[]> {
+  const response = await request("/api/tasks");
+  if (!response.ok) await throwApiError(response);
+
+  const body = (await response.json()) as { tasks?: Task[] };
+  return Array.isArray(body.tasks) ? body.tasks : [];
+}
+
+export async function createTask(input: NewTask): Promise<Task> {
+  const body: { title: string; ownerAgentId?: string } = {
+    title: input.title,
+  };
+  if (typeof input.ownerAgentId === "string" && input.ownerAgentId.length > 0) {
+    body.ownerAgentId = input.ownerAgentId;
+  }
+
+  const response = await request("/api/tasks", { method: "POST", body });
+  if (!response.ok) await throwApiError(response);
+
+  const result = (await response.json()) as { task: Task };
+  return result.task;
+}
+
+export async function updateTaskStatus(
+  taskId: string,
+  status: string,
+): Promise<Task> {
+  const response = await request(
+    `/api/tasks/${encodeURIComponent(taskId)}/status`,
+    { method: "POST", body: { status } },
+  );
+  if (!response.ok) await throwApiError(response);
+
+  const result = (await response.json()) as { task: Task };
+  return result.task;
 }

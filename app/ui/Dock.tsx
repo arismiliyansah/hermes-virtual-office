@@ -1,4 +1,6 @@
 import { For, Match, Switch, createSignal } from "solid-js";
+import { ChatPanel } from "./ChatPanel";
+import { KanbanPanel } from "./KanbanPanel";
 
 type Tab = "Chat" | "Kanban" | "Meeting" | "Cron";
 
@@ -24,59 +26,6 @@ const DOT_CLASS: Record<RosterAgent["dot"], string> = {
   a2a: "bg-a2a",
   idle: "bg-idle",
 };
-
-function ChatPanel() {
-  return (
-    <div class="flex flex-col gap-3">
-      <div class="flex items-center gap-2.5 border-b border-line pb-3">
-        <span class="flex h-9 w-9 items-center justify-center rounded-[10px] bg-sage text-[12px] font-bold text-white">
-          DA
-        </span>
-        <div class="min-w-0">
-          <b class="block text-sm">Damar</b>
-          <small class="text-[11.5px] text-ink-soft">Agent · siap membantu</small>
-        </div>
-        <span class="ml-auto inline-flex items-center gap-1.5 rounded-full border border-line bg-panel-2 px-2.5 py-1 text-[11px] font-semibold text-sage">
-          <i class="h-[7px] w-[7px] rounded-full bg-current" />
-          bekerja
-        </span>
-      </div>
-      <div class="max-w-[85%] rounded-xl rounded-tl-[4px] border border-line bg-panel-2 px-3 py-2.5 text-[13px] leading-relaxed">
-        Placeholder percakapan agent. Riwayat nyata menyusul.
-      </div>
-      <p class="text-[11.5px] leading-relaxed text-ink-soft">
-        Ruang ini akan diisi pesan langsung dan tool call pada task berikutnya.
-      </p>
-    </div>
-  );
-}
-
-function KanbanPanel() {
-  const columns = [
-    { title: "Antrean", count: 2 },
-    { title: "Dikerjakan", count: 1 },
-    { title: "Review", count: 1 },
-    { title: "Selesai", count: 3 },
-  ] as const;
-
-  return (
-    <div class="grid grid-cols-2 gap-2.5">
-      <For each={columns}>
-        {(column) => (
-          <div class="rounded-[10px] border border-line bg-panel-2 p-2.5">
-            <h5 class="mb-2 flex justify-between text-[10.5px] font-semibold uppercase tracking-[.05em] text-ink-soft">
-              {column.title}
-              <span>{column.count}</span>
-            </h5>
-            <div class="rounded-lg border border-line bg-[var(--card-bg)] px-2.5 py-2 text-[12.5px] shadow-sm">
-              Kartu placeholder
-            </div>
-          </div>
-        )}
-      </For>
-    </div>
-  );
-}
 
 function MeetingPanel() {
   return (
